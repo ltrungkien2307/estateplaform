@@ -30,7 +30,7 @@ export const paymentService = {
     const query = params.toString() ? `?${params.toString()}` : "";
     return requestJson<CreateCheckoutResponse>(`/payments/create-checkout${query}`, {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: payload,
     });
   },
 
