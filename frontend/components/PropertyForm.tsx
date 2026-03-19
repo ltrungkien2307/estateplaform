@@ -314,30 +314,30 @@ export default function PropertyForm({ initialData, onSubmit, isLoading = false 
         gap: '1.5rem',
       }}>
         <div style={{ flex: 1 }}>
-          <p style={{ fontSize: '0.58rem', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--e-gold-light)', fontWeight: 700, marginBottom: 4 }}>
+          <p style={{ fontSize: '0.72rem', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--e-gold)', fontWeight: 700, marginBottom: 6 }}>
             {initialData ? 'Chỉnh Sửa Bất Động Sản' : 'Đăng Tin Mới'}
           </p>
-          <p style={{ fontFamily: "var(--e-sans)", fontSize: '1.15rem', fontWeight: 700, color: '#fff' }}>
+          <p style={{ fontFamily: "var(--e-sans)", fontSize: '1.4rem', fontWeight: 700, color: 'var(--e-charcoal)' }}>
             {formData.title || 'Nhập tiêu đề...'}
           </p>
         </div>
         <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
           {formData.type && (
             <div style={{ textAlign: 'right' }}>
-              <p style={{ fontSize: '0.55rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', marginBottom: 2 }}>Loại</p>
-              <p style={{ fontSize: '0.82rem', color: '#fff', fontWeight: 600, fontFamily: "var(--e-sans)" }}>{PROPERTY_TYPES.find(t => t.value === formData.type)?.label}</p>
+              <p style={{ fontSize: '0.72rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--e-muted)', marginBottom: 4 }}>Loại</p>
+              <p style={{ fontSize: '1.05rem', color: 'var(--e-charcoal)', fontWeight: 600, fontFamily: "var(--e-sans)" }}>{PROPERTY_TYPES.find(t => t.value === formData.type)?.label}</p>
             </div>
           )}
           {formData.price > 0 && (
             <div style={{ textAlign: 'right' }}>
-              <p style={{ fontSize: '0.55rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', marginBottom: 2 }}>Giá</p>
-              <p style={{ fontSize: '0.82rem', color: 'var(--e-gold-light)', fontWeight: 700, fontFamily: "var(--e-sans)" }}>{formData.price.toLocaleString('vi-VN')} ₫</p>
+              <p style={{ fontSize: '0.72rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--e-muted)', marginBottom: 4 }}>Giá</p>
+              <p style={{ fontSize: '1.05rem', color: 'var(--e-gold)', fontWeight: 700, fontFamily: "var(--e-sans)" }}>{formData.price.toLocaleString('vi-VN')} ₫</p>
             </div>
           )}
           {formData.area && formData.area > 0 ? (
             <div style={{ textAlign: 'right' }}>
-              <p style={{ fontSize: '0.55rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', marginBottom: 2 }}>Diện tích</p>
-              <p style={{ fontSize: '0.82rem', color: '#fff', fontWeight: 600, fontFamily: "var(--e-sans)" }}>{formData.area} m²</p>
+              <p style={{ fontSize: '0.72rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--e-muted)', marginBottom: 4 }}>Diện tích</p>
+              <p style={{ fontSize: '1.05rem', color: 'var(--e-charcoal)', fontWeight: 600, fontFamily: "var(--e-sans)" }}>{formData.area} m²</p>
             </div>
           ) : null}
         </div>

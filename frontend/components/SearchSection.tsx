@@ -106,7 +106,7 @@ function FilterCell({
                         fontWeight: 600,
                         textTransform: 'uppercase',
                         letterSpacing: '0.14em',
-                        color: 'var(--e-light-muted)',
+                        color: 'var(--e-charcoal)',
                         marginBottom: 3,
                         fontFamily: 'var(--e-sans)',
                     }}>
@@ -115,7 +115,7 @@ function FilterCell({
                     <div style={{
                         fontSize: '0.85rem',
                         fontWeight: activeLabel ? 500 : 400,
-                        color: activeLabel ? 'var(--e-charcoal)' : 'var(--e-sand)',
+                        color: activeLabel ? 'var(--e-charcoal)' : 'var(--e-muted)',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
@@ -213,7 +213,7 @@ export default function SearchSection({ onSearch, loading }: SearchSectionProps)
         <section className="e-search" id="search">
 
             {/* ── Tabs — dùng e-filter-tabs style ── */}
-            <div className="e-filter-tabs" style={{ marginBottom: '1.5rem', width: 'fit-content', border: '1px solid var(--e-beige)' }}>
+            <div className="e-filter-tabs" style={{ marginBottom: '1.5rem', width: 'fit-content', border: '1px solid rgba(154,124,69,0.4)' }}>
                 {TABS.map((tab) => (
                     <button
                         key={tab}
@@ -235,7 +235,7 @@ export default function SearchSection({ onSearch, loading }: SearchSectionProps)
                 <div style={{ display: 'flex', alignItems: 'stretch' }} className="e-filter-row">
 
                     {/* Location */}
-                    <div style={{ flex: 2, minWidth: 0, borderRight: '1px solid var(--e-beige)' }}>
+                    <div style={{ flex: 2, minWidth: 0, borderRight: '1px solid rgba(154,124,69,0.25)' }}>
                         <div style={{
                             display: 'flex',
                             alignItems: 'center',

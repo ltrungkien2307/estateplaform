@@ -10,10 +10,7 @@ export default function RegisterPage() {
     const router = useRouter();
     const [step, setStep] = useState<Step>(1);
     const [role, setRole] = useState<Role>('user');
-    const [form, setForm] = useState({
-        name: '', email: '', password: '', passwordConfirm: '',
-        address: '', phone: '',
-    });
+    const [form, setForm] = useState({ name: '', email: '', password: '', passwordConfirm: '', address: '', phone: '' });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [showPassword, setShowPassword] = useState(false);
@@ -25,28 +22,16 @@ export default function RegisterPage() {
 
     function handleNext(e: React.FormEvent) {
         e.preventDefault();
-        if (!form.name || !form.email || !form.password || !form.passwordConfirm) {
-            setError('Vui lòng điền đầy đủ thông tin.');
-            return;
-        }
-        if (form.password !== form.passwordConfirm) {
-            setError('Mật khẩu xác nhận không khớp.');
-            return;
-        }
-        if (form.password.length < 8) {
-            setError('Mật khẩu phải có ít nhất 8 ký tự.');
-            return;
-        }
+        if (!form.name || !form.email || !form.password || !form.passwordConfirm) { setError('Vui lòng điền đầy đủ thông tin.'); return; }
+        if (form.password !== form.passwordConfirm) { setError('Mật khẩu xác nhận không khớp.'); return; }
+        if (form.password.length < 8) { setError('Mật khẩu phải có ít nhất 8 ký tự.'); return; }
         setError(null);
         setStep(2);
     }
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
-        if (!form.address) {
-            setError('Vui lòng nhập địa chỉ.');
-            return;
-        }
+        if (!form.address) { setError('Vui lòng nhập địa chỉ.'); return; }
         setLoading(true);
         setError(null);
         try {
@@ -54,15 +39,7 @@ export default function RegisterPage() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
-                body: JSON.stringify({
-                    name: form.name,
-                    email: form.email,
-                    password: form.password,
-                    passwordConfirm: form.passwordConfirm,
-                    address: form.address,
-                    phone: form.phone,
-                    role,
-                }),
+                body: JSON.stringify({ name: form.name, email: form.email, password: form.password, passwordConfirm: form.passwordConfirm, address: form.address, phone: form.phone, role }),
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.message || 'Đăng ký thất bại');
@@ -74,6 +51,9 @@ export default function RegisterPage() {
         }
     }
 
+    const pwStrength = form.password.length >= 8 ? 'strong' : form.password.length >= 4 ? 'medium' : 'weak';
+    const pwColor = pwStrength === 'strong' ? 'var(--e-gold)' : pwStrength === 'medium' ? '#e07b39' : '#e57373';
+
     return (
         <>
             <Head>
@@ -81,120 +61,117 @@ export default function RegisterPage() {
                 <meta name="viewport" content="width=device-width, initial-scale=1" />
             </Head>
 
-            <div className="estoria" style={{ minHeight: '100vh', background: 'var(--e-ivory)' }}>
+            <div className="estoria" style={{ minHeight: '100vh', background: 'var(--e-cream)' }}>
 
                 {/* ── Navbar ── */}
                 <nav style={{
                     position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
-                    height: 70, padding: '0 5vw',
+                    height: 68, padding: '0 5vw',
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     background: 'rgba(255,255,255,0.96)',
                     backdropFilter: 'blur(18px)',
-                    borderBottom: '1px solid rgba(140,110,63,0.15)',
+                    borderBottom: '1px solid rgba(154,124,69,0.15)',
                 }}>
                     <Link href="/" style={{
                         fontFamily: 'var(--e-serif)', fontSize: '1.55rem', fontWeight: 600,
                         letterSpacing: '0.04em', color: 'var(--e-charcoal)', textDecoration: 'none',
                     }}>
-                        Esto<span style={{ color: 'var(--e-gold-light)' }}>ria</span>
+                        Esto<span style={{ color: 'var(--e-gold)' }}>ria</span>
                     </Link>
-                    <span style={{ fontSize: '0.78rem', color: 'var(--e-muted)', fontWeight: 500, letterSpacing: '0.06em' }}>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--e-muted)', fontWeight: 500, fontFamily: 'var(--e-sans)' }}>
                         Đã có tài khoản?{' '}
-                        <Link href="/auth/login" style={{ color: 'var(--e-gold)', textDecoration: 'none', fontWeight: 600 }}>
+                        <Link href="/auth/login" style={{ color: 'var(--e-gold)', textDecoration: 'none', fontWeight: 700 }}>
                             Đăng nhập
                         </Link>
                     </span>
                 </nav>
 
-                {/* ── Main Layout ── */}
-                <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
-                    minHeight: '100vh',
-                }}>
+                {/* ── Split Layout ── */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', minHeight: '100vh' }}>
 
                     {/* ── Left: Visual Panel ── */}
                     <div style={{
                         position: 'relative', overflow: 'hidden',
-                        background: 'var(--e-charcoal)',
                         display: 'flex', flexDirection: 'column',
                         justifyContent: 'space-between',
                         padding: '9rem 5vw 5vw',
                     }}>
                         <div style={{
                             position: 'absolute', inset: 0,
-                            backgroundImage: 'url(https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=900&q=80)',
+                            backgroundImage: 'url(https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=1200&q=85)',
                             backgroundSize: 'cover', backgroundPosition: 'center',
-                            opacity: 0.3,
                         }} />
                         <div style={{
                             position: 'absolute', inset: 0,
-                            background: 'linear-gradient(135deg, rgba(17,28,20,0.8) 0%, rgba(17,28,20,0.65) 100%)',
+                            background: 'linear-gradient(135deg, rgba(17,28,20,0.82) 0%, rgba(17,28,20,0.68) 100%)',
+                        }} />
+                        {/* Noise */}
+                        <div style={{
+                            position: 'absolute', inset: 0,
+                            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E")`,
+                            opacity: 0.4, pointerEvents: 'none',
                         }} />
 
-                        {/* Top content */}
+                        {/* Top text */}
                         <div style={{ position: 'relative', zIndex: 2 }}>
                             <div style={{
-                                display: 'inline-block',
-                                fontSize: '0.68rem', letterSpacing: '0.20em', textTransform: 'uppercase',
-                                color: 'var(--e-gold-light)', fontFamily: 'var(--e-sans)', fontWeight: 500,
-                                border: '1px solid rgba(184,146,78,0.45)', padding: '6px 14px',
+                                display: 'inline-block', fontSize: '0.64rem', letterSpacing: '0.22em',
+                                textTransform: 'uppercase', color: 'var(--e-gold-light)',
+                                fontFamily: 'var(--e-sans)', fontWeight: 700,
+                                border: '1px solid rgba(184,146,78,0.4)', padding: '6px 14px',
                                 marginBottom: '1.5rem',
                             }}>Tạo Tài Khoản</div>
                             <h2 style={{
                                 fontFamily: 'var(--e-serif)',
                                 fontSize: 'clamp(1.8rem, 3vw, 2.8rem)',
-                                fontWeight: 500, color: 'var(--e-white)',
-                                lineHeight: 1.2, marginBottom: '1.2rem',
+                                fontWeight: 500, color: '#fff',
+                                lineHeight: 1.15, marginBottom: '1.2rem',
                             }}>
                                 Bắt đầu hành trình<br />
                                 <em style={{ fontStyle: 'italic', color: 'var(--e-gold-light)', fontWeight: 400 }}>tìm tổ ấm</em><br />
                                 của bạn
                             </h2>
                             <p style={{
-                                fontSize: '0.85rem', color: 'rgba(255,255,255,0.45)',
-                                lineHeight: 1.8, fontWeight: 300, maxWidth: 360,
+                                fontSize: '0.9rem', color: 'rgba(255,255,255,0.45)',
+                                lineHeight: 1.85, fontWeight: 300, maxWidth: 360,
+                                fontFamily: 'var(--e-sans)',
                             }}>
                                 Đăng ký miễn phí để khám phá, yêu thích và liên hệ chủ nhà trực tiếp.
                             </p>
                         </div>
 
-                        {/* Role benefits */}
+                        {/* Bottom: role info + step bar */}
                         <div style={{ position: 'relative', zIndex: 2 }}>
-                            <div style={{ marginBottom: '1.5rem' }}>
+                            <div style={{ marginBottom: '1.8rem' }}>
                                 {[
                                     { title: 'Khách hàng', text: 'Tìm kiếm và thuê/mua bất động sản' },
                                     { title: 'Chủ nhà (Provider)', text: 'Đăng tin và quản lý tài sản' },
                                 ].map((item) => (
-                                    <div key={item.title} style={{
-                                        display: 'flex', gap: '1rem', alignItems: 'flex-start',
-                                        marginBottom: '1rem',
-                                    }}>
+                                    <div key={item.title} style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start', marginBottom: '1rem' }}>
                                         <div style={{
-                                            width: 36, height: 36, flexShrink: 0,
-                                            border: '1px solid rgba(140,110,63,0.35)',
+                                            width: 34, height: 34, flexShrink: 0,
+                                            border: '1px solid rgba(154,124,69,0.35)',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            fontSize: '1rem',
-                                        }}></div>
+                                            color: 'var(--e-gold-light)', fontSize: '0.9rem',
+                                        }}>✦</div>
                                         <div>
-                                            <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'rgba(255,255,255,0.85)', marginBottom: 2 }}>{item.title}</div>
-                                            <div style={{ fontSize: '0.74rem', color: 'rgba(255,255,255,0.35)', lineHeight: 1.6, fontWeight: 300 }}>{item.text}</div>
+                                            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'rgba(255,255,255,0.85)', marginBottom: 3, fontFamily: 'var(--e-sans)' }}>{item.title}</div>
+                                            <div style={{ fontSize: '0.76rem', color: 'rgba(255,255,255,0.35)', lineHeight: 1.6, fontWeight: 300, fontFamily: 'var(--e-sans)' }}>{item.text}</div>
                                         </div>
                                     </div>
                                 ))}
                             </div>
 
                             {/* Step indicator */}
-                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                                 {([1, 2] as Step[]).map((s) => (
                                     <div key={s} style={{
                                         height: 3, flex: 1,
-                                        background: step >= s ? 'var(--e-gold-light)' : 'rgba(255,255,255,0.2)',
-                                        transition: 'background 0.4s',
-                                        borderRadius: 2,
+                                        background: step >= s ? 'var(--e-gold-light)' : 'rgba(255,255,255,0.18)',
+                                        transition: 'background 0.4s', borderRadius: 2,
                                     }} />
                                 ))}
-                                <span style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.35)', marginLeft: 4, letterSpacing: '0.1em' }}>
+                                <span style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.35)', marginLeft: 4, letterSpacing: '0.1em', fontFamily: 'var(--e-sans)' }}>
                                     {step}/2
                                 </span>
                             </div>
@@ -205,21 +182,24 @@ export default function RegisterPage() {
                     <div style={{
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         padding: '7rem 5vw 4rem',
-                        background: 'var(--e-ivory)',
-                        overflowY: 'auto',
+                        background: 'var(--e-cream)', overflowY: 'auto',
                     }}>
                         <div style={{ width: '100%', maxWidth: 440 }}>
 
                             {/* Header */}
                             <div style={{ marginBottom: '2rem' }}>
-                                <div className="e-section-label" style={{ marginBottom: '0.8rem' }}>
+                                <p style={{
+                                    fontSize: '0.62rem', letterSpacing: '0.2em', textTransform: 'uppercase',
+                                    color: 'var(--e-gold)', fontWeight: 700, fontFamily: 'var(--e-sans)',
+                                    marginBottom: '0.8rem',
+                                }}>
                                     {step === 1 ? 'Bước 1 / 2' : 'Bước 2 / 2'}
-                                </div>
+                                </p>
                                 <h1 style={{
                                     fontFamily: 'var(--e-serif)',
                                     fontSize: 'clamp(1.8rem, 2.8vw, 2.4rem)',
                                     fontWeight: 500, color: 'var(--e-charcoal)',
-                                    lineHeight: 1.15, marginBottom: '0.5rem',
+                                    lineHeight: 1.12, marginBottom: '0.5rem',
                                 }}>
                                     {step === 1 ? (
                                         <>Thông tin <em style={{ fontStyle: 'italic', color: 'var(--e-muted)', fontWeight: 400 }}>tài khoản</em></>
@@ -227,7 +207,7 @@ export default function RegisterPage() {
                                         <>Thông tin <em style={{ fontStyle: 'italic', color: 'var(--e-muted)', fontWeight: 400 }}>cá nhân</em></>
                                     )}
                                 </h1>
-                                <p style={{ fontSize: '0.83rem', color: 'var(--e-muted)', fontWeight: 300, lineHeight: 1.7 }}>
+                                <p style={{ fontSize: '0.88rem', color: 'var(--e-muted)', fontWeight: 300, lineHeight: 1.75, fontFamily: 'var(--e-sans)' }}>
                                     {step === 1 ? 'Điền email và mật khẩu để tạo tài khoản.' : 'Hoàn tất hồ sơ của bạn.'}
                                 </p>
                             </div>
@@ -235,10 +215,10 @@ export default function RegisterPage() {
                             {/* Error */}
                             {error && (
                                 <div style={{
-                                    border: '1px solid #f5c6c6', background: '#fdf2f2',
-                                    padding: '12px 16px', borderRadius: 2,
-                                    fontSize: '0.83rem', color: '#c0392b', marginBottom: '1.5rem',
-                                    display: 'flex', alignItems: 'center', gap: 8,
+                                    border: '1px solid rgba(184,74,42,0.3)', background: 'rgba(184,74,42,0.06)',
+                                    padding: '12px 16px', fontSize: '0.84rem', color: '#b84a2a',
+                                    marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: 8,
+                                    fontFamily: 'var(--e-sans)',
                                 }}>
                                     <span>⚠</span> {error}
                                 </div>
@@ -246,36 +226,30 @@ export default function RegisterPage() {
 
                             {/* ─── STEP 1 ─── */}
                             {step === 1 && (
-                                <form onSubmit={handleNext} style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                                <form onSubmit={handleNext} style={{ display: 'flex', flexDirection: 'column', gap: '1.3rem' }}>
 
                                     {/* Role selector */}
                                     <div>
-                                        <label style={{
-                                            display: 'block', fontSize: '0.62rem', letterSpacing: '0.14em',
-                                            textTransform: 'uppercase', color: 'var(--e-light-muted)',
-                                            fontWeight: 600, marginBottom: 10,
-                                        }}>Loại Tài Khoản</label>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, background: 'var(--e-beige)' }}>
+                                        <label style={labelStyle}>Loại Tài Khoản</label>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, background: 'rgba(154,124,69,0.12)' }}>
                                             {([
                                                 { value: 'user', label: 'Khách Hàng' },
                                                 { value: 'provider', label: 'Chủ Nhà' },
-                                            ] as { value: Role; label: string; icon: string }[]).map((r) => (
+                                            ] as { value: Role; label: string }[]).map((r) => (
                                                 <button
-                                                    key={r.value}
-                                                    type="button"
+                                                    key={r.value} type="button"
                                                     onClick={() => setRole(r.value)}
                                                     style={{
-                                                        padding: '14px 16px',
-                                                        background: role === r.value ? 'var(--e-charcoal)' : 'var(--e-white)',
-                                                        color: role === r.value ? 'var(--e-white)' : 'var(--e-muted)',
+                                                        padding: '13px 16px',
+                                                        background: role === r.value ? 'var(--e-charcoal)' : '#fff',
+                                                        color: role === r.value ? '#fff' : 'var(--e-muted)',
                                                         border: 'none', cursor: 'pointer',
-                                                        fontFamily: 'var(--e-sans)', fontSize: '0.78rem',
-                                                        fontWeight: 600, letterSpacing: '0.08em',
-                                                        transition: 'all 0.25s',
-                                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                                                        fontFamily: 'var(--e-sans)', fontSize: '0.8rem',
+                                                        fontWeight: 700, letterSpacing: '0.08em',
+                                                        transition: 'all 0.22s',
                                                     }}
                                                 >
-                                                    <span>{r.icon}</span> {r.label}
+                                                    {role === r.value ? '✦ ' : ''}{r.label}
                                                 </button>
                                             ))}
                                         </div>
@@ -284,25 +258,17 @@ export default function RegisterPage() {
                                     {/* Name */}
                                     <div>
                                         <label style={labelStyle}>Họ & Tên</label>
-                                        <input type="text" name="name" required
-                                            value={form.name} onChange={handleChange}
-                                            placeholder="Nguyễn Văn A"
-                                            style={inputStyle}
+                                        <input type="text" name="name" required value={form.name} onChange={handleChange} placeholder="Nguyễn Văn A" style={inputStyle}
                                             onFocus={e => e.target.style.borderColor = 'var(--e-gold)'}
-                                            onBlur={e => e.target.style.borderColor = 'var(--e-beige)'}
-                                        />
+                                            onBlur={e => e.target.style.borderColor = 'rgba(154,124,69,0.25)'} />
                                     </div>
 
                                     {/* Email */}
                                     <div>
                                         <label style={labelStyle}>Email</label>
-                                        <input type="email" name="email" required
-                                            value={form.email} onChange={handleChange}
-                                            placeholder="your@email.com"
-                                            style={inputStyle}
+                                        <input type="email" name="email" required value={form.email} onChange={handleChange} placeholder="your@email.com" style={inputStyle}
                                             onFocus={e => e.target.style.borderColor = 'var(--e-gold)'}
-                                            onBlur={e => e.target.style.borderColor = 'var(--e-beige)'}
-                                        />
+                                            onBlur={e => e.target.style.borderColor = 'rgba(154,124,69,0.25)'} />
                                     </div>
 
                                     {/* Password */}
@@ -310,28 +276,24 @@ export default function RegisterPage() {
                                         <label style={labelStyle}>Mật Khẩu</label>
                                         <div style={{ position: 'relative' }}>
                                             <input
-                                                type={showPassword ? 'text' : 'password'}
-                                                name="password" required
+                                                type={showPassword ? 'text' : 'password'} name="password" required
                                                 value={form.password} onChange={handleChange}
                                                 placeholder="Tối thiểu 8 ký tự"
                                                 style={{ ...inputStyle, paddingRight: 44 }}
                                                 onFocus={e => e.target.style.borderColor = 'var(--e-gold)'}
-                                                onBlur={e => e.target.style.borderColor = 'var(--e-beige)'}
+                                                onBlur={e => e.target.style.borderColor = 'rgba(154,124,69,0.25)'}
                                             />
-                                            <button type="button" onClick={() => setShowPassword(p => !p)}
-                                                style={eyeBtnStyle}>
+                                            <button type="button" onClick={() => setShowPassword(p => !p)} style={eyeBtnStyle}>
                                                 <EyeIcon show={showPassword} />
                                             </button>
                                         </div>
                                         {/* Strength bar */}
                                         {form.password && (
-                                            <div style={{ display: 'flex', gap: 3, marginTop: 6 }}>
+                                            <div style={{ display: 'flex', gap: 3, marginTop: 7 }}>
                                                 {[1, 2, 3, 4].map(i => (
                                                     <div key={i} style={{
-                                                        flex: 1, height: 2,
-                                                        background: form.password.length >= i * 2
-                                                            ? (form.password.length >= 8 ? 'var(--e-gold)' : '#e07b39')
-                                                            : 'var(--e-beige)',
+                                                        flex: 1, height: 2, borderRadius: 2,
+                                                        background: form.password.length >= i * 2 ? pwColor : 'rgba(154,124,69,0.15)',
                                                         transition: 'background 0.3s',
                                                     }} />
                                                 ))}
@@ -349,12 +311,12 @@ export default function RegisterPage() {
                                             style={{
                                                 ...inputStyle,
                                                 borderColor: form.passwordConfirm && form.passwordConfirm !== form.password
-                                                    ? '#e57373' : 'var(--e-beige)',
+                                                    ? '#e57373' : 'rgba(154,124,69,0.25)',
                                             }}
                                             onFocus={e => e.target.style.borderColor = 'var(--e-gold)'}
                                             onBlur={e => {
                                                 e.target.style.borderColor = form.passwordConfirm !== form.password && form.passwordConfirm
-                                                    ? '#e57373' : 'var(--e-beige)';
+                                                    ? '#e57373' : 'rgba(154,124,69,0.25)';
                                             }}
                                         />
                                     </div>
@@ -366,9 +328,9 @@ export default function RegisterPage() {
                                         Tiếp Theo →
                                     </button>
 
-                                    <p style={{ textAlign: 'center', fontSize: '0.83rem', color: 'var(--e-muted)', fontWeight: 300 }}>
+                                    <p style={{ textAlign: 'center', fontSize: '0.86rem', color: 'var(--e-muted)', fontWeight: 300, fontFamily: 'var(--e-sans)' }}>
                                         Đã có tài khoản?{' '}
-                                        <Link href="/auth/login" style={{ color: 'var(--e-gold)', fontWeight: 600, textDecoration: 'none' }}>
+                                        <Link href="/auth/login" style={{ color: 'var(--e-gold)', fontWeight: 700, textDecoration: 'none' }}>
                                             Đăng nhập
                                         </Link>
                                     </p>
@@ -377,43 +339,33 @@ export default function RegisterPage() {
 
                             {/* ─── STEP 2 ─── */}
                             {step === 2 && (
-                                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.3rem' }}>
 
                                     {/* Address */}
                                     <div>
                                         <label style={labelStyle}>Địa Chỉ</label>
-                                        <input type="text" name="address" required
-                                            value={form.address} onChange={handleChange}
-                                            placeholder="Số nhà, đường, quận, tỉnh thành"
-                                            style={inputStyle}
+                                        <input type="text" name="address" required value={form.address} onChange={handleChange} placeholder="Số nhà, đường, quận, tỉnh thành" style={inputStyle}
                                             onFocus={e => e.target.style.borderColor = 'var(--e-gold)'}
-                                            onBlur={e => e.target.style.borderColor = 'var(--e-beige)'}
-                                        />
+                                            onBlur={e => e.target.style.borderColor = 'rgba(154,124,69,0.25)'} />
                                     </div>
 
                                     {/* Phone */}
                                     <div>
                                         <label style={labelStyle}>
                                             Số Điện Thoại{' '}
-                                            <span style={{ color: 'var(--e-beige)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>
-                                                (tuỳ chọn)
-                                            </span>
+                                            <span style={{ color: 'var(--e-light-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(tuỳ chọn)</span>
                                         </label>
-                                        <input type="tel" name="phone"
-                                            value={form.phone} onChange={handleChange}
-                                            placeholder="0901 234 567"
-                                            style={inputStyle}
+                                        <input type="tel" name="phone" value={form.phone} onChange={handleChange} placeholder="0901 234 567" style={inputStyle}
                                             onFocus={e => e.target.style.borderColor = 'var(--e-gold)'}
-                                            onBlur={e => e.target.style.borderColor = 'var(--e-beige)'}
-                                        />
+                                            onBlur={e => e.target.style.borderColor = 'rgba(154,124,69,0.25)'} />
                                     </div>
 
                                     {/* Summary card */}
                                     <div style={{
-                                        border: '1px solid var(--e-beige)', padding: '1rem 1.2rem',
-                                        background: 'var(--e-cream)',
+                                        border: '1px solid rgba(154,124,69,0.2)',
+                                        padding: '1.1rem 1.3rem', background: 'rgba(255,252,248,0.8)',
                                     }}>
-                                        <div style={{ fontSize: '0.62rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--e-light-muted)', fontWeight: 600, marginBottom: 8 }}>
+                                        <div style={{ fontSize: '0.62rem', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--e-gold)', fontWeight: 700, marginBottom: 10, fontFamily: 'var(--e-sans)' }}>
                                             Xác nhận thông tin
                                         </div>
                                         {[
@@ -423,35 +375,28 @@ export default function RegisterPage() {
                                         ].map(item => (
                                             <div key={item.label} style={{
                                                 display: 'flex', justifyContent: 'space-between',
-                                                fontSize: '0.8rem', color: 'var(--e-muted)',
-                                                padding: '4px 0',
-                                                borderBottom: '1px solid var(--e-beige)',
+                                                fontSize: '0.82rem', color: 'var(--e-muted)',
+                                                padding: '5px 0',
+                                                borderBottom: '1px solid rgba(154,124,69,0.1)',
+                                                fontFamily: 'var(--e-sans)',
                                             }}>
-                                                <span style={{ fontWeight: 600, color: 'var(--e-charcoal)' }}>{item.label}</span>
+                                                <span style={{ fontWeight: 700, color: 'var(--e-charcoal)' }}>{item.label}</span>
                                                 <span>{item.value}</span>
                                             </div>
                                         ))}
                                     </div>
 
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 8 }}>
-                                        <button type="button"
-                                            onClick={() => { setStep(1); setError(null); }}
+                                        <button type="button" onClick={() => { setStep(1); setError(null); }}
                                             style={{
-                                                padding: '15px', background: 'transparent',
-                                                border: '1px solid var(--e-beige)',
+                                                padding: '14px', background: 'transparent',
+                                                border: '1px solid rgba(154,124,69,0.25)',
                                                 color: 'var(--e-muted)', cursor: 'pointer',
-                                                fontFamily: 'var(--e-sans)', fontSize: '0.72rem',
-                                                fontWeight: 600, letterSpacing: '0.1em',
-                                                transition: 'all 0.2s',
+                                                fontFamily: 'var(--e-sans)', fontSize: '0.74rem',
+                                                fontWeight: 700, letterSpacing: '0.1em', transition: 'all 0.2s',
                                             }}
-                                            onMouseEnter={e => {
-                                                (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--e-charcoal)';
-                                                (e.currentTarget as HTMLButtonElement).style.color = 'var(--e-charcoal)';
-                                            }}
-                                            onMouseLeave={e => {
-                                                (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--e-beige)';
-                                                (e.currentTarget as HTMLButtonElement).style.color = 'var(--e-muted)';
-                                            }}
+                                            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--e-charcoal)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--e-charcoal)'; }}
+                                            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(154,124,69,0.25)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--e-muted)'; }}
                                         >
                                             ← Quay lại
                                         </button>
@@ -459,26 +404,21 @@ export default function RegisterPage() {
                                         <button type="submit" disabled={loading}
                                             style={{
                                                 ...submitBtnStyle,
-                                                background: loading ? 'var(--e-sand)' : 'var(--e-charcoal)',
+                                                background: loading ? 'var(--e-muted)' : 'var(--e-charcoal)',
                                                 cursor: loading ? 'not-allowed' : 'pointer',
                                             }}
                                             onMouseEnter={e => { if (!loading) (e.currentTarget as HTMLButtonElement).style.background = 'var(--e-gold)'; }}
                                             onMouseLeave={e => { if (!loading) (e.currentTarget as HTMLButtonElement).style.background = 'var(--e-charcoal)'; }}
                                         >
-                                            {loading ? (
-                                                <>
-                                                    <span style={spinnerStyle} />
-                                                    Đang tạo tài khoản…
-                                                </>
-                                            ) : 'Tạo Tài Khoản'}
+                                            {loading ? (<><span style={spinnerStyle} />Đang tạo tài khoản…</>) : 'Tạo Tài Khoản'}
                                         </button>
                                     </div>
 
-                                    <p style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--e-light-muted)', fontWeight: 300, lineHeight: 1.7 }}>
+                                    <p style={{ textAlign: 'center', fontSize: '0.76rem', color: 'var(--e-light-muted)', fontWeight: 300, lineHeight: 1.7, fontFamily: 'var(--e-sans)' }}>
                                         Bằng cách đăng ký, bạn đồng ý với{' '}
-                                        <a href="#" style={{ color: 'var(--e-gold)', textDecoration: 'none' }}>Điều khoản sử dụng</a>{' '}
-                                        và{' '}
-                                        <a href="#" style={{ color: 'var(--e-gold)', textDecoration: 'none' }}>Chính sách bảo mật</a>.
+                                        <a href="#" style={{ color: 'var(--e-gold)', textDecoration: 'none', fontWeight: 600 }}>Điều khoản sử dụng</a>
+                                        {' '}và{' '}
+                                        <a href="#" style={{ color: 'var(--e-gold)', textDecoration: 'none', fontWeight: 600 }}>Chính sách bảo mật</a>.
                                     </p>
                                 </form>
                             )}
@@ -489,38 +429,36 @@ export default function RegisterPage() {
             </div>
 
             <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-        input::placeholder { color: var(--e-light-muted); }
-      `}</style>
+                @keyframes spin { to { transform: rotate(360deg); } }
+                input::placeholder { color: var(--e-light-muted); opacity: 1; }
+            `}</style>
         </>
     );
 }
 
-/* ─── Shared Styles ─────────────────────────────────────────── */
+/* ─── Shared Styles ──────────────────────────────────────────── */
 const labelStyle: React.CSSProperties = {
-    display: 'block', fontSize: '0.62rem', letterSpacing: '0.14em',
-    textTransform: 'uppercase', color: 'var(--e-light-muted)',
-    fontWeight: 600, marginBottom: 8,
+    display: 'block', fontSize: '0.64rem', letterSpacing: '0.16em',
+    textTransform: 'uppercase', color: 'var(--e-muted)',
+    fontWeight: 700, marginBottom: 8, fontFamily: 'var(--e-sans)',
 };
 
 const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '14px 16px',
-    fontFamily: 'var(--e-sans)', fontSize: '0.9rem',
-    border: '1px solid var(--e-beige)',
-    background: 'var(--e-white)', color: 'var(--e-charcoal)',
-    outline: 'none', transition: 'border-color 0.2s',
+    width: '100%', padding: '13px 15px',
+    fontFamily: 'var(--e-sans)', fontSize: '0.92rem',
+    border: '1px solid rgba(154,124,69,0.25)',
+    background: '#fff', color: 'var(--e-charcoal)',
+    outline: 'none', transition: 'border-color 0.2s, box-shadow 0.2s',
     borderRadius: 0,
 };
 
 const submitBtnStyle: React.CSSProperties = {
-    padding: '15px 32px',
-    background: 'var(--e-charcoal)',
-    color: 'var(--e-white)',
+    padding: '14px 32px',
+    background: 'var(--e-charcoal)', color: '#fff',
     border: 'none', cursor: 'pointer',
-    fontFamily: 'var(--e-sans)', fontSize: '0.72rem',
-    fontWeight: 600, letterSpacing: '0.14em',
-    textTransform: 'uppercase',
-    transition: 'background 0.3s',
+    fontFamily: 'var(--e-sans)', fontSize: '0.74rem',
+    fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase',
+    transition: 'background 0.25s',
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
 };
 

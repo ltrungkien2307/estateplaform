@@ -1,420 +1,1331 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/router";
-import { adminService } from "@/services/adminService";
-import { useAuth } from "@/contexts/AuthContext";
-import Link from "next/link";
 import Head from "next/head";
+import Link from "next/link";
+import {
+  CheckCircle, XCircle, LoaderCircle, RefreshCcw,
+  ShieldCheck, ShieldAlert, CheckCircle2, UserRoundSearch,
+  Clock, Home, Users, FileText, Key, DollarSign,
+  BedDouble, Ruler, MapPin, ChevronDown, ChevronUp,
+  SlidersHorizontal, Search,
+} from "lucide-react";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip as RechartsTooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, LineChart, Line, Legend,
+} from "recharts";
+import { adminService } from "@/services/adminService";
+import { userService } from "@/services/userService";
+import { useAuth } from "@/contexts/AuthContext";
+import KycStatusBadge from "@/components/KycStatusBadge";
+import type { Property } from "@/types/property";
+import type { KycStatus, User } from "@/types/user";
+
+/* ═══════════════════════════════════════════════════════════
+   TYPES
+═══════════════════════════════════════════════════════════ */
+type View = "dashboard" | "properties" | "providers" | "kyc";
+type KycStatusFilter = KycStatus | "all";
+type SortOrder = "newest" | "oldest";
+type RoleFilter = "provider" | "user";
 
 interface DashboardStats {
-  totalUsers: number;
-  totalProviders: number;
-  totalProperties: number;
-  totalPropertyApprovals: number;
-  totalPropertyRejections: number;
-  totalVerifiedProviders: number;
-  totalPendingProviders: number;
-  totalRejectedProviders: number;
-  pendingPropertiesCount: number;
+  totalUsers: number; totalProviders: number; totalProperties: number;
+  totalPropertyApprovals: number; totalPropertyRejections: number;
+  totalVerifiedProviders: number; totalPendingProviders: number;
+  totalRejectedProviders: number; pendingPropertiesCount: number;
 }
 
-// ─── Stat Card ────────────────────────────────────────────────
-function EStatCard({
-  label,
-  value,
-  icon,
-  accent = false,
-  warn = false,
+/* ═══════════════════════════════════════════════════════════
+   HELPERS
+═══════════════════════════════════════════════════════════ */
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  return "Đã xảy ra lỗi.";
+}
+function formatDate(date?: string) {
+  if (!date) return "N/A";
+  return new Date(date).toLocaleString("vi-VN", {
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+}
+function prettyJson(value: unknown) {
+  if (!value) return "Không có dữ liệu";
+  try { return JSON.stringify(value, null, 2); } catch { return "Không thể hiển thị dữ liệu"; }
+}
+const fmtVND = (n: number) =>
+  new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(Math.round(n));
+function isImageUrl(url: string) {
+  return /\/image\/upload\//.test(url) || /\.(png|jpe?g|webp|gif|bmp|svg)(\?|$)/i.test(url);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ANIMATED SELECT — position: fixed dropdown
+   Thoát khỏi mọi overflow container
+═══════════════════════════════════════════════════════════ */
+interface SelectOption { value: string; label: string; }
+
+function AnimatedSelect({
+  label, value, onChange, options, icon: Icon,
 }: {
-  label: string;
-  value: string | number;
-  icon: string;
-  accent?: boolean;
-  warn?: boolean;
+  label: string; value: string;
+  onChange: (v: string) => void;
+  options: SelectOption[];
+  icon?: React.ElementType;
 }) {
-  const bg = accent ? 'var(--e-charcoal)' : warn ? 'rgba(140,110,63,0.06)' : 'var(--e-white)';
-  const border = warn ? '1px solid rgba(140,110,63,0.2)' : `1px solid ${accent ? 'transparent' : 'var(--e-beige)'}`;
+  const [open, setOpen] = useState(false);
+  const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 0 });
+  const [mounted, setMounted] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const dropRef = useRef<HTMLDivElement>(null);
+  const activeLabel = options.find(o => o.value === value)?.label ?? "";
 
-  return (
-    <div style={{
-      background: bg, border, padding: '1.8rem',
-      position: 'relative', overflow: 'hidden',
-      transition: 'transform 0.3s var(--e-ease), box-shadow 0.3s var(--e-ease)',
-    }}
-      onMouseEnter={e => {
-        (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-3px)';
-        (e.currentTarget as HTMLDivElement).style.boxShadow = '0 12px 32px rgba(17,28,20,0.10)';
-      }}
-      onMouseLeave={e => {
-        (e.currentTarget as HTMLDivElement).style.transform = 'none';
-        (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
-      }}
-    >
-      {accent && (
-        <div style={{
-          position: 'absolute', inset: 0, opacity: 0.12,
-          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.1'/%3E%3C/svg%3E")`,
-          pointerEvents: 'none',
-        }} />
-      )}
-      <div style={{
-        display: 'flex', justifyContent: 'space-between',
-        alignItems: 'flex-start', marginBottom: '1.2rem',
-      }}>
-        <div style={{
-          fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
-          color: accent ? 'rgba(255,255,255,0.45)' : 'var(--e-light-muted)',
-          fontWeight: 600,
-        }}>{label}</div>
-        <span style={{ fontSize: '1rem', opacity: 0.6, color: accent ? 'var(--e-gold-light)' : 'var(--e-sand)' }}>
-          {icon}
-        </span>
-      </div>
-      <div style={{
-        fontFamily: 'var(--e-serif)',
-        fontSize: 'clamp(1.6rem, 2.5vw, 2.4rem)',
-        fontWeight: 500,
-        color: accent ? 'var(--e-white)' : 'var(--e-charcoal)',
-        lineHeight: 1,
-      }}>{value}</div>
-    </div>
-  );
-}
+  // SSR safe — portal cần document
+  useEffect(() => { setMounted(true); }, []);
 
-// ─── Section Header ───────────────────────────────────────────
-function SectionHeader({ label, title, action }: { label: string; title: string; action?: React.ReactNode }) {
-  return (
-    <div style={{
-      padding: '1.4rem 1.8rem',
-      borderBottom: '1px solid var(--e-beige)',
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+  // Click outside
+  useEffect(() => {
+    function outside(e: MouseEvent) {
+      if (buttonRef.current?.contains(e.target as Node)) return;
+      if (dropRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    }
+    document.addEventListener("mousedown", outside);
+    return () => document.removeEventListener("mousedown", outside);
+  }, []);
+
+  // Cập nhật vị trí khi scroll/resize
+  useEffect(() => {
+    if (!open) return;
+    function reposition() {
+      if (!buttonRef.current) return;
+      const r = buttonRef.current.getBoundingClientRect();
+      setDropPos({ top: r.bottom + 6, left: r.left, width: r.width });
+    }
+    window.addEventListener("scroll", reposition, true);
+    window.addEventListener("resize", reposition);
+    return () => {
+      window.removeEventListener("scroll", reposition, true);
+      window.removeEventListener("resize", reposition);
+    };
+  }, [open]);
+
+  const handleOpen = () => {
+    if (buttonRef.current) {
+      const r = buttonRef.current.getBoundingClientRect();
+      setDropPos({ top: r.bottom + 6, left: r.left, width: r.width });
+    }
+    setOpen(v => !v);
+  };
+
+  // Dropdown render thẳng vào document.body qua portal
+  const dropdown = (
+    <div ref={dropRef} style={{
+      position: "fixed",
+      top: dropPos.top,
+      left: dropPos.left,
+      width: dropPos.width,
+      zIndex: 99999,
+      background: "#fff",
+      border: "1px solid rgba(154,124,69,0.2)",
+      borderRadius: "10px",
+      boxShadow: "0 20px 60px rgba(0,0,0,0.18)",
+      transformOrigin: "top center",
+      transition: "opacity 0.18s ease, transform 0.18s ease",
+      opacity: open ? 1 : 0,
+      transform: open ? "scaleY(1) translateY(0)" : "scaleY(0.9) translateY(-6px)",
+      pointerEvents: open ? "auto" : "none",
+      overflow: "hidden",
     }}>
-      <div>
-        <div className="e-section-label" style={{ marginBottom: '0.3rem', fontSize: '0.6rem' }}>{label}</div>
-        <h2 style={{ fontFamily: 'var(--e-serif)', fontSize: '1.2rem', fontWeight: 500, color: 'var(--e-charcoal)' }}>
-          {title}
-        </h2>
-      </div>
-      {action}
+      {options.map((opt, i) => (
+        <button key={opt.value} type="button"
+          onClick={() => { onChange(opt.value); setOpen(false); }}
+          style={{
+            width: "100%", textAlign: "left", padding: "10px 14px",
+            border: "none",
+            background: opt.value === value ? "rgba(154,124,69,0.07)" : "transparent",
+            color: opt.value === value ? "var(--e-gold)" : "var(--e-charcoal)",
+            fontFamily: "var(--e-sans)", fontSize: "0.83rem",
+            fontWeight: opt.value === value ? 700 : 400,
+            cursor: "pointer", transition: "background 0.15s",
+            borderBottom: i < options.length - 1 ? "1px solid rgba(154,124,69,0.06)" : "none",
+          }}
+          onMouseEnter={e => { if (opt.value !== value) e.currentTarget.style.background = "rgba(154,124,69,0.04)"; }}
+          onMouseLeave={e => { if (opt.value !== value) e.currentTarget.style.background = "transparent"; }}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+
+  return (
+    <div style={{ position: "relative" }}>
+      <label style={{
+        display: "block", fontSize: "0.6rem", letterSpacing: "0.14em",
+        textTransform: "uppercase", color: "var(--e-muted)", fontWeight: 700,
+        marginBottom: 6, fontFamily: "var(--e-sans)",
+      }}>{label}</label>
+
+      <button ref={buttonRef} type="button" onClick={handleOpen}
+        style={{
+          width: "100%", display: "flex", alignItems: "center", gap: "0.5rem",
+          padding: "9px 12px",
+          border: `1px solid ${open ? "var(--e-gold)" : "rgba(154,124,69,0.25)"}`,
+          borderRadius: "8px",
+          background: open ? "rgba(154,124,69,0.04)" : "rgba(255,255,255,0.92)",
+          cursor: "pointer", fontFamily: "var(--e-sans)", fontSize: "0.84rem",
+          color: "var(--e-charcoal)", transition: "all 0.2s",
+          boxShadow: open ? "0 0 0 3px rgba(154,124,69,0.08)" : "none",
+          textAlign: "left",
+        }}>
+        {Icon && <Icon size={13} style={{ color: open ? "var(--e-gold)" : "var(--e-light-muted)", flexShrink: 0 }} />}
+        <span style={{ flex: 1 }}>{activeLabel}</span>
+        <ChevronDown size={13} style={{
+          color: open ? "var(--e-gold)" : "var(--e-light-muted)",
+          transition: "transform 0.25s",
+          transform: open ? "rotate(180deg)" : "none",
+          flexShrink: 0,
+        }} />
+      </button>
+
+      {/* Portal — render vào body, không bị clip bởi bất kỳ container nào */}
+      {mounted && createPortal(dropdown, document.body)}
     </div>
   );
 }
+
+/* ═══════════════════════════════════════════════════════════
+   VIEW WRAPPER
+═══════════════════════════════════════════════════════════ */
+function ViewWrapper({ children }: { children: React.ReactNode }) {
+  return <div><div>{children}</div></div>;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   STAT CARD
+═══════════════════════════════════════════════════════════ */
+function StatCard({ label, value, icon, accent = false, warn = false }: {
+  label: string; value: string | number; icon: React.ReactNode;
+  accent?: boolean; warn?: boolean;
+}) {
+  return (
+    <div className="e-glass-card" style={{
+      padding: "1.5rem",
+      background: accent ? "var(--e-charcoal)" : warn ? "rgba(154,124,69,0.06)" : "rgba(255,255,255,0.85)",
+      backdropFilter: "blur(8px)",
+      border: accent ? "none" : warn ? "1px solid rgba(154,124,69,0.25)" : undefined,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>
+        <p style={{ fontSize: "0.62rem", letterSpacing: "0.15em", textTransform: "uppercase", color: accent ? "rgba(255,255,255,0.5)" : "var(--e-muted)", fontWeight: 700, margin: 0, fontFamily: "var(--e-sans)" }}>{label}</p>
+        <div style={{ color: accent ? "var(--e-gold-light)" : "var(--e-gold)", opacity: 0.85 }}>{icon}</div>
+      </div>
+      <p style={{ fontFamily: "var(--e-serif)", fontSize: "clamp(1.4rem, 2vw, 2rem)", fontWeight: 600, color: accent ? "#fff" : "var(--e-charcoal)", lineHeight: 1, margin: 0, letterSpacing: "-0.02em" }}>{value}</p>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DASHBOARD VIEW
+═══════════════════════════════════════════════════════════ */
+function DashboardView({ stats, onNavigate }: { stats: DashboardStats | null; onNavigate: (v: View) => void }) {
+  const trendData = [
+    { month: "T1", "Tin đăng": 12, "Đã duyệt": 8, "Từ chối": 2 },
+    { month: "T2", "Tin đăng": 18, "Đã duyệt": 14, "Từ chối": 3 },
+    { month: "T3", "Tin đăng": 24, "Đã duyệt": 19, "Từ chối": 4 },
+    { month: "T4", "Tin đăng": 20, "Đã duyệt": 16, "Từ chối": 2 },
+    { month: "T5", "Tin đăng": 31, "Đã duyệt": 25, "Từ chối": 5 },
+    { month: "T6", "Tin đăng": 28, "Đã duyệt": 22, "Từ chối": 3 },
+  ];
+  const propertyPieData = [
+    { name: "Đã duyệt", value: stats?.totalPropertyApprovals || 0, color: "#2E8B75" },
+    { name: "Từ chối", value: stats?.totalPropertyRejections || 0, color: "#b84a2a" },
+    { name: "Chờ duyệt", value: stats?.pendingPropertiesCount || 0, color: "var(--e-gold)" },
+  ].filter(d => d.value > 0);
+  const providerPieData = [
+    { name: "Đã xác minh", value: stats?.totalVerifiedProviders || 0, color: "#2E8B75" },
+    { name: "Chờ xác minh", value: stats?.totalPendingProviders || 0, color: "var(--e-gold)" },
+    { name: "Từ chối", value: stats?.totalRejectedProviders || 0, color: "#b84a2a" },
+  ].filter(d => d.value > 0);
+  const tooltipStyle = {
+    borderRadius: "12px", border: "1px solid rgba(154,124,69,0.2)",
+    background: "rgba(255,255,255,0.97)", backdropFilter: "blur(8px)",
+    boxShadow: "0 8px 24px rgba(0,0,0,0.08)", fontFamily: "var(--e-sans)", fontSize: "0.8rem",
+  };
+
+  return (
+    <div style={{ padding: "2.5rem 2.5vw" }}>
+      <div style={{ marginBottom: "1.8rem", paddingBottom: "1.5rem", borderBottom: "1px solid rgba(154,124,69,0.15)" }}>
+        <p style={{ fontSize: "0.6rem", letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--e-gold)", fontWeight: 700, marginBottom: 6, fontFamily: "var(--e-sans)" }}>Admin Dashboard</p>
+        <h1 style={{ fontFamily: "var(--e-serif)", fontSize: "clamp(1.6rem, 2.8vw, 2.4rem)", fontWeight: 500, color: "var(--e-charcoal)", margin: 0, lineHeight: 1.2 }}>
+          Bảng <em style={{ fontStyle: "italic", fontWeight: 400, color: "var(--e-muted)" }}>Điều Khiển</em>
+        </h1>
+      </div>
+
+      {/* Alerts */}
+      {((stats?.pendingPropertiesCount ?? 0) > 0 || (stats?.totalPendingProviders ?? 0) > 0) && (
+        <div style={{ display: "grid", gridTemplateColumns: (stats?.pendingPropertiesCount ?? 0) > 0 && (stats?.totalPendingProviders ?? 0) > 0 ? "1fr 1fr" : "1fr", gap: "0.75rem", marginBottom: "1.5rem" }}>
+          {(stats?.pendingPropertiesCount ?? 0) > 0 && (
+            <button onClick={() => onNavigate("properties")}
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1rem 1.4rem", background: "rgba(154,124,69,0.07)", border: "1px solid rgba(154,124,69,0.2)", borderRadius: "10px", cursor: "pointer", transition: "background 0.2s", textAlign: "left", fontFamily: "var(--e-sans)" }}
+              onMouseEnter={e => e.currentTarget.style.background = "rgba(154,124,69,0.13)"}
+              onMouseLeave={e => e.currentTarget.style.background = "rgba(154,124,69,0.07)"}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ color: "var(--e-gold)", fontSize: "1rem" }}>⚠</span>
+                <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--e-charcoal)" }}>{stats?.pendingPropertiesCount} tin đang chờ duyệt</span>
+              </div>
+              <span style={{ fontSize: "0.65rem", color: "var(--e-gold)", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" }}>Duyệt Ngay →</span>
+            </button>
+          )}
+          {(stats?.totalPendingProviders ?? 0) > 0 && (
+            <button onClick={() => onNavigate("providers")}
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1rem 1.4rem", background: "rgba(154,124,69,0.07)", border: "1px solid rgba(154,124,69,0.2)", borderRadius: "10px", cursor: "pointer", transition: "background 0.2s", textAlign: "left", fontFamily: "var(--e-sans)" }}
+              onMouseEnter={e => e.currentTarget.style.background = "rgba(154,124,69,0.13)"}
+              onMouseLeave={e => e.currentTarget.style.background = "rgba(154,124,69,0.07)"}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ color: "var(--e-gold)", fontSize: "1rem" }}>◈</span>
+                <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--e-charcoal)" }}>{stats?.totalPendingProviders} provider chờ xác minh</span>
+              </div>
+              <span style={{ fontSize: "0.65rem", color: "var(--e-gold)", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" }}>Xác Minh →</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1rem", marginBottom: "1.5rem" }}>
+        <StatCard label="Tổng Người Dùng" value={stats?.totalUsers || 0} icon={<Users size={20} />} accent />
+        <StatCard label="Nhà Cung Cấp" value={stats?.totalProviders || 0} icon={<Home size={20} />} />
+        <StatCard label="Tổng Bất Động Sản" value={stats?.totalProperties || 0} icon={<FileText size={20} />} />
+        <StatCard label="Chờ Phê Duyệt" value={stats?.pendingPropertiesCount || 0} icon={<Clock size={20} />} warn />
+      </div>
+
+      {/* Charts row 1 */}
+      <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
+        <div className="e-glass-card" style={{ padding: "1.8rem", background: "rgba(255,255,255,0.85)", backdropFilter: "blur(8px)" }}>
+          <p style={{ fontSize: "0.58rem", letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--e-gold)", fontWeight: 700, marginBottom: 4, fontFamily: "var(--e-sans)" }}>Xu Hướng</p>
+          <h3 style={{ fontFamily: "var(--e-serif)", fontSize: "1.1rem", fontWeight: 600, color: "var(--e-charcoal)", marginBottom: "1.5rem" }}>Biến Động Tin Đăng 6 Tháng</h3>
+          <div style={{ height: 240 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={trendData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.04)" />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--e-muted)" }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: "var(--e-muted)" }} axisLine={false} tickLine={false} dx={-6} />
+                <RechartsTooltip contentStyle={tooltipStyle} />
+                <Legend wrapperStyle={{ fontSize: "0.72rem", fontFamily: "var(--e-sans)", paddingTop: 12 }} />
+                <Line type="monotone" dataKey="Tin đăng" stroke="var(--e-gold)" strokeWidth={2.5} dot={{ r: 3, fill: "var(--e-gold)" }} activeDot={{ r: 5 }} />
+                <Line type="monotone" dataKey="Đã duyệt" stroke="#2E8B75" strokeWidth={2.5} dot={{ r: 3, fill: "#2E8B75" }} activeDot={{ r: 5 }} />
+                <Line type="monotone" dataKey="Từ chối" stroke="#b84a2a" strokeWidth={2} strokeDasharray="4 3" dot={{ r: 3, fill: "#b84a2a" }} activeDot={{ r: 5 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="e-glass-card" style={{ padding: "1.8rem", display: "flex", flexDirection: "column", background: "rgba(255,255,255,0.85)", backdropFilter: "blur(8px)" }}>
+          <p style={{ fontSize: "0.58rem", letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--e-gold)", fontWeight: 700, marginBottom: 4, fontFamily: "var(--e-sans)" }}>Bất Động Sản</p>
+          <h3 style={{ fontFamily: "var(--e-serif)", fontSize: "1.1rem", fontWeight: 600, color: "var(--e-charcoal)", marginBottom: "1rem" }}>Phân Bổ Trạng Thái</h3>
+          <div style={{ flex: 1, minHeight: 180 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={propertyPieData} cx="50%" cy="50%" innerRadius={52} outerRadius={75} paddingAngle={4} dataKey="value">
+                  {propertyPieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                </Pie>
+                <RechartsTooltip contentStyle={tooltipStyle} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div style={{ display: "flex", justifyContent: "center", gap: "0.8rem", flexWrap: "wrap", marginTop: "0.5rem" }}>
+            {propertyPieData.map((d, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.7rem", color: "var(--e-muted)", fontFamily: "var(--e-sans)" }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: d.color, flexShrink: 0 }} />
+                {d.name} ({d.value})
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Charts row 2 */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1.5rem" }}>
+        <div className="e-glass-card" style={{ padding: "1.8rem", background: "rgba(255,255,255,0.85)", backdropFilter: "blur(8px)" }}>
+          <p style={{ fontSize: "0.58rem", letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--e-gold)", fontWeight: 700, marginBottom: 4, fontFamily: "var(--e-sans)" }}>So Sánh</p>
+          <h3 style={{ fontFamily: "var(--e-serif)", fontSize: "1.1rem", fontWeight: 600, color: "var(--e-charcoal)", marginBottom: "1.5rem" }}>Duyệt & Từ Chối Theo Tháng</h3>
+          <div style={{ height: 220 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={trendData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.04)" />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--e-muted)" }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: "var(--e-muted)" }} axisLine={false} tickLine={false} dx={-6} />
+                <RechartsTooltip contentStyle={tooltipStyle} />
+                <Legend wrapperStyle={{ fontSize: "0.72rem", fontFamily: "var(--e-sans)", paddingTop: 10 }} />
+                <Bar dataKey="Đã duyệt" fill="#2E8B75" radius={[5, 5, 0, 0]} maxBarSize={32} />
+                <Bar dataKey="Từ chối" fill="#b84a2a" radius={[5, 5, 0, 0]} maxBarSize={32} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="e-glass-card" style={{ padding: "1.8rem", display: "flex", flexDirection: "column", background: "rgba(255,255,255,0.85)", backdropFilter: "blur(8px)" }}>
+          <p style={{ fontSize: "0.58rem", letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--e-gold)", fontWeight: 700, marginBottom: 4, fontFamily: "var(--e-sans)" }}>Provider</p>
+          <h3 style={{ fontFamily: "var(--e-serif)", fontSize: "1.1rem", fontWeight: 600, color: "var(--e-charcoal)", marginBottom: "1rem" }}>Trạng Thái Xác Minh</h3>
+          <div style={{ flex: 1, minHeight: 180 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={providerPieData} cx="50%" cy="50%" innerRadius={52} outerRadius={75} paddingAngle={4} dataKey="value">
+                  {providerPieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                </Pie>
+                <RechartsTooltip contentStyle={tooltipStyle} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div style={{ display: "flex", justifyContent: "center", gap: "0.8rem", flexWrap: "wrap", marginTop: "0.5rem" }}>
+            {providerPieData.map((d, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.7rem", color: "var(--e-muted)", fontFamily: "var(--e-sans)" }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: d.color, flexShrink: 0 }} />
+                {d.name} ({d.value})
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="e-glass-card" style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(8px)", overflow: "hidden" }}>
+        <div style={{ padding: "1.2rem 1.6rem", borderBottom: "1px solid rgba(154,124,69,0.1)" }}>
+          <p style={{ fontSize: "0.58rem", letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--e-gold)", fontWeight: 700, marginBottom: 4, fontFamily: "var(--e-sans)" }}>Hành Động</p>
+          <h2 style={{ fontFamily: "var(--e-sans)", fontSize: "1rem", fontWeight: 700, color: "var(--e-charcoal)", margin: 0 }}>Truy Cập Nhanh</h2>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.75rem", padding: "1rem" }}>
+          {[
+            { view: "properties" as View, label: "Duyệt Bất Động Sản", desc: `${stats?.pendingPropertiesCount || 0} đang chờ`, icon: <FileText size={22} /> },
+            { view: "providers" as View, label: "Xác Minh Provider", desc: `${stats?.totalPendingProviders || 0} đang chờ`, icon: <Users size={22} /> },
+            { view: "kyc" as View, label: "Quản Lý KYC", desc: "Duyệt hồ sơ CCCD", icon: <Key size={22} /> },
+          ].map(action => (
+            <button key={action.view} onClick={() => onNavigate(action.view)}
+              style={{ display: "flex", flexDirection: "column", padding: "1.4rem 1.6rem", background: "rgba(255,252,248,0.7)", border: "1px solid rgba(154,124,69,0.12)", borderRadius: "12px", cursor: "pointer", textAlign: "left", transition: "all 0.2s", fontFamily: "var(--e-sans)" }}
+              onMouseEnter={e => { e.currentTarget.style.background = "rgba(154,124,69,0.07)"; e.currentTarget.style.borderColor = "rgba(154,124,69,0.28)"; e.currentTarget.style.transform = "translateY(-2px)"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,252,248,0.7)"; e.currentTarget.style.borderColor = "rgba(154,124,69,0.12)"; e.currentTarget.style.transform = "none"; }}
+            >
+              <span style={{ color: "var(--e-gold)", marginBottom: "0.8rem" }}>{action.icon}</span>
+              <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--e-charcoal)", marginBottom: 4 }}>{action.label}</div>
+              <div style={{ fontSize: "0.7rem", color: "var(--e-muted)" }}>{action.desc}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PROPERTY MODERATION ROW
+═══════════════════════════════════════════════════════════ */
+function PropertyModerationRow({ property, onApprove, onReject, isLoading }: {
+  property: Property; onApprove: () => Promise<void>;
+  onReject: (reason: string) => Promise<void>; isLoading: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason] = useState("");
+  const owner = typeof property.ownerId !== "string" && property.ownerId ? property.ownerId : null;
+
+  const handleReject = async () => {
+    if (!reason.trim()) { alert("Vui lòng nhập lý do từ chối."); return; }
+    await onReject(reason);
+  };
+
+  return (
+    <div className="e-glass-card" style={{ background: "rgba(255,255,255,0.90)", backdropFilter: "blur(8px)", overflow: "hidden" }}>
+      {/* Main row */}
+      <div style={{ padding: "1.4rem 1.8rem", display: "flex", alignItems: "flex-start", gap: "1.2rem" }}>
+        <div style={{ display: "flex", gap: "0.4rem", flexShrink: 0 }}>
+          {(property.images?.slice(0, 2) || []).map((img, i) => (
+            <div key={i} style={{ width: i === 0 ? 88 : 56, height: 66, borderRadius: "8px", overflow: "hidden", background: "var(--e-beige)", flexShrink: 0 }}>
+              <img src={img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            </div>
+          ))}
+          {!property.images?.length && (
+            <div style={{ width: 88, height: 66, borderRadius: "8px", background: "var(--e-beige)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Home size={20} color="var(--e-light-muted)" />
+            </div>
+          )}
+        </div>
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h3 style={{ fontFamily: "var(--e-sans)", fontSize: "1rem", fontWeight: 700, color: "var(--e-charcoal)", marginBottom: 3, lineHeight: 1.3 }}>{property.title}</h3>
+          <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.74rem", color: "var(--e-light-muted)", marginBottom: 8, fontFamily: "var(--e-sans)" }}>
+            <MapPin size={12} color="var(--e-gold)" /> {property.address}
+          </div>
+          <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+            {[
+              { icon: <DollarSign size={12} />, text: fmtVND(property.price) },
+              { icon: <Ruler size={12} />, text: `${property.area} m²` },
+              { icon: <BedDouble size={12} />, text: `${property.bedrooms ?? 0} phòng ngủ` },
+              { icon: <FileText size={12} />, text: property.type },
+            ].map(({ icon, text }) => (
+              <span key={text} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: "0.72rem", color: "var(--e-light-muted)", fontFamily: "var(--e-sans)" }}>
+                <span style={{ color: "var(--e-gold)" }}>{icon}</span>{text}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexShrink: 0 }}>
+          <button onClick={() => setExpanded(v => !v)}
+            style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 13px", border: "1px solid rgba(154,124,69,0.2)", background: expanded ? "rgba(154,124,69,0.06)" : "transparent", borderRadius: "8px", cursor: "pointer", fontFamily: "var(--e-sans)", fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--e-charcoal)", transition: "all 0.2s" }}>
+            {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />} Chi Tiết
+          </button>
+          <button onClick={() => setRejecting(v => !v)} disabled={isLoading}
+            style={{ padding: "7px 13px", border: "1px solid rgba(184,74,42,0.25)", background: rejecting ? "rgba(184,74,42,0.08)" : "transparent", borderRadius: "8px", cursor: "pointer", fontFamily: "var(--e-sans)", fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#b84a2a", transition: "all 0.2s" }}>
+            Từ Chối
+          </button>
+          <button onClick={onApprove} disabled={isLoading}
+            style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 15px", background: "#2E8B75", color: "#fff", border: "none", borderRadius: "8px", cursor: isLoading ? "not-allowed" : "pointer", fontFamily: "var(--e-sans)", fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", opacity: isLoading ? 0.6 : 1, transition: "all 0.2s" }}
+            onMouseEnter={e => { if (!isLoading) e.currentTarget.style.background = "#1e6b57"; }}
+            onMouseLeave={e => { if (!isLoading) e.currentTarget.style.background = "#2E8B75"; }}>
+            {isLoading ? <LoaderCircle size={12} className="animate-spin" /> : <CheckCircle size={12} />} Duyệt
+          </button>
+        </div>
+      </div>
+
+      {/* Rejection */}
+      <div style={{ maxHeight: rejecting ? 130 : 0, overflow: "hidden", transition: "max-height 0.3s ease" }}>
+        <div style={{ borderTop: "1px solid rgba(184,74,42,0.15)", background: "rgba(184,74,42,0.03)", padding: "1rem 1.8rem", display: "flex", gap: "0.75rem" }}>
+          <textarea rows={2} value={reason} onChange={e => setReason(e.target.value)} placeholder="Nhập lý do từ chối tin đăng này..."
+            style={{ flex: 1, padding: "9px 12px", border: "1px solid rgba(184,74,42,0.25)", borderRadius: "8px", background: "#fff", fontFamily: "var(--e-sans)", fontSize: "0.84rem", color: "var(--e-charcoal)", outline: "none", resize: "vertical", minHeight: 56 }}
+            onFocus={e => e.target.style.borderColor = "#b84a2a"}
+            onBlur={e => e.target.style.borderColor = "rgba(184,74,42,0.25)"}
+          />
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+            <button onClick={handleReject} style={{ padding: "8px 16px", background: "#b84a2a", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer", fontFamily: "var(--e-sans)", fontSize: "0.66rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" }}>Xác Nhận</button>
+            <button onClick={() => { setRejecting(false); setReason(""); }} style={{ padding: "8px 16px", background: "transparent", color: "var(--e-muted)", border: "1px solid rgba(0,0,0,0.1)", borderRadius: "8px", cursor: "pointer", fontFamily: "var(--e-sans)", fontSize: "0.66rem", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase" }}>Hủy</button>
+          </div>
+        </div>
+      </div>
+
+      {/* Expanded detail */}
+      <div style={{ maxHeight: expanded ? 900 : 0, overflow: "hidden", transition: "max-height 0.4s ease" }}>
+        <div style={{ borderTop: "1px solid rgba(154,124,69,0.1)", padding: "1.4rem 1.8rem", background: "rgba(255,252,248,0.5)" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+            <div>
+              <p style={{ fontSize: "0.6rem", letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--e-gold)", fontWeight: 700, marginBottom: 6, fontFamily: "var(--e-sans)" }}>Mô Tả</p>
+              <p style={{ fontSize: "0.8rem", color: "var(--e-muted)", lineHeight: 1.75, marginBottom: "1.2rem", fontFamily: "var(--e-sans)" }}>{property.description || "Chưa có mô tả."}</p>
+              {(property.amenities?.length ?? 0) > 0 && (
+                <>
+                  <p style={{ fontSize: "0.6rem", letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--e-gold)", fontWeight: 700, marginBottom: 6, fontFamily: "var(--e-sans)" }}>Tiện Ích</p>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginBottom: "1rem" }}>
+                    {property.amenities?.map(a => (
+                      <span key={a} style={{ padding: "3px 10px", background: "rgba(154,124,69,0.07)", border: "1px solid rgba(154,124,69,0.15)", borderRadius: "6px", fontSize: "0.7rem", color: "var(--e-charcoal)", fontFamily: "var(--e-sans)" }}>{a}</span>
+                    ))}
+                  </div>
+                </>
+              )}
+              {owner && (
+                <>
+                  <p style={{ fontSize: "0.6rem", letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--e-gold)", fontWeight: 700, marginBottom: 6, fontFamily: "var(--e-sans)" }}>Chủ Sở Hữu</p>
+                  <div style={{ padding: "0.8rem 1rem", background: "rgba(255,255,255,0.8)", border: "1px solid rgba(154,124,69,0.12)", borderRadius: "8px" }}>
+                    <p style={{ fontWeight: 700, color: "var(--e-charcoal)", fontSize: "0.84rem", marginBottom: 3, fontFamily: "var(--e-sans)" }}>{owner.name}</p>
+                    <p style={{ fontSize: "0.76rem", color: "var(--e-muted)", fontFamily: "var(--e-sans)" }}>{owner.email}</p>
+                    {owner.phone && <p style={{ fontSize: "0.76rem", color: "var(--e-muted)", fontFamily: "var(--e-sans)" }}>{owner.phone}</p>}
+                  </div>
+                </>
+              )}
+            </div>
+            <div>
+              {(property.images?.length ?? 0) > 0 && (
+                <>
+                  <p style={{ fontSize: "0.6rem", letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--e-gold)", fontWeight: 700, marginBottom: 6, fontFamily: "var(--e-sans)" }}>Hình Ảnh</p>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.4rem", marginBottom: "1rem" }}>
+                    {property.images!.slice(0, 6).map((url, i) => (
+                      <a key={i} href={url} target="_blank" rel="noreferrer" style={{ display: "block", height: 64, borderRadius: "6px", overflow: "hidden", border: "1px solid rgba(154,124,69,0.12)" }}>
+                        <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", transition: "transform 0.3s" }}
+                          onMouseEnter={e => e.currentTarget.style.transform = "scale(1.06)"}
+                          onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"} />
+                      </a>
+                    ))}
+                  </div>
+                </>
+              )}
+              {(property.ownershipDocuments?.length ?? 0) > 0 && (
+                <>
+                  <p style={{ fontSize: "0.6rem", letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--e-gold)", fontWeight: 700, marginBottom: 6, fontFamily: "var(--e-sans)" }}>Giấy Tờ Pháp Lý</p>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
+                    {property.ownershipDocuments?.map((url, i) => (
+                      <a key={i} href={url} target="_blank" rel="noreferrer" style={{ display: "block", borderRadius: "8px", overflow: "hidden", border: "1px solid rgba(154,124,69,0.15)", textDecoration: "none" }}>
+                        {isImageUrl(url) ? (
+                          <img src={url} alt={`Giấy tờ ${i + 1}`} style={{ width: "100%", height: 72, objectFit: "cover", display: "block" }} />
+                        ) : (
+                          <div style={{ height: 72, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--e-cream)", fontSize: "0.72rem", color: "var(--e-muted)", fontFamily: "var(--e-sans)" }}>PDF</div>
+                        )}
+                        <div style={{ padding: "0.4rem 0.6rem", background: "#fff", fontSize: "0.68rem", color: "var(--e-charcoal)", fontFamily: "var(--e-sans)", fontWeight: 600 }}>Giấy tờ {i + 1}</div>
+                      </a>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PROPERTIES VIEW
+═══════════════════════════════════════════════════════════ */
+type PropFilter = "all" | "apartment" | "house" | "villa" | "studio" | "office";
+
+function PropertiesView() {
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [processedId, setProcessedId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<PropFilter>("all");
+  const [sortBy, setSortBy] = useState("newest");
+  const [showFilters, setShowFilters] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await adminService.getPendingProperties(page, 20);
+      setProperties(res.data.properties);
+      setTotalPages(res.totalPages || 1);
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); }
+  }, [page]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const filtered = useMemo(() => {
+    let list = [...properties];
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(p => p.title.toLowerCase().includes(q) || p.address.toLowerCase().includes(q));
+    }
+    if (typeFilter !== "all") list = list.filter(p => p.type === typeFilter);
+    if (sortBy === "price_asc") list.sort((a, b) => a.price - b.price);
+    else if (sortBy === "price_desc") list.sort((a, b) => b.price - a.price);
+    return list;
+  }, [properties, search, typeFilter, sortBy]);
+
+  const handleApprove = (id: string) => async () => {
+    setProcessedId(id);
+    try { await adminService.moderateProperty(id, { status: "approved" }); setProperties(p => p.filter(x => x._id !== id)); alert("Phê duyệt thành công"); }
+    catch (e: any) { alert(e.message || "Lỗi"); }
+    finally { setProcessedId(null); }
+  };
+
+  const handleReject = (id: string) => async (reason: string) => {
+    setProcessedId(id);
+    try { await adminService.moderateProperty(id, { status: "rejected", rejectionReason: reason }); setProperties(p => p.filter(x => x._id !== id)); alert("Đã từ chối"); }
+    catch (e: any) { alert(e.message || "Lỗi"); }
+    finally { setProcessedId(null); }
+  };
+
+  return (
+    <div style={{ padding: "2.5rem 2.5vw" }}>
+      <div style={{ marginBottom: "1.5rem", paddingBottom: "1.5rem", borderBottom: "1px solid rgba(154,124,69,0.15)", display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem" }}>
+        <div>
+          <p style={{ fontSize: "0.6rem", letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--e-gold)", fontWeight: 700, marginBottom: 6, fontFamily: "var(--e-sans)" }}>Quản Lý</p>
+          <h2 style={{ fontFamily: "var(--e-serif)", fontSize: "clamp(1.5rem, 2.5vw, 2rem)", fontWeight: 500, color: "var(--e-charcoal)", margin: 0 }}>
+            Duyệt <span style={{ fontFamily: "var(--e-sans)", fontWeight: 400, color: "var(--e-light-muted)", fontSize: "clamp(1.1rem, 2vw, 1.5rem)" }}>Bất Động Sản</span>
+          </h2>
+        </div>
+        <div style={{ display: "flex", gap: "0.5rem" }}>
+          <span style={{ fontSize: "0.6rem", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--e-gold)", border: "1px solid rgba(154,124,69,0.3)", padding: "5px 12px", background: "rgba(154,124,69,0.06)", borderRadius: "6px", fontFamily: "var(--e-sans)", display: "flex", alignItems: "center" }}>
+            {filtered.length} đang chờ
+          </span>
+          <button onClick={() => setShowFilters(v => !v)}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", background: showFilters ? "var(--e-charcoal)" : "rgba(255,255,255,0.85)", border: "1px solid rgba(154,124,69,0.2)", borderRadius: "8px", cursor: "pointer", fontFamily: "var(--e-sans)", fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: showFilters ? "#fff" : "var(--e-charcoal)", transition: "all 0.2s" }}>
+            <SlidersHorizontal size={13} /> Bộ Lọc
+          </button>
+        </div>
+      </div>
+
+      {/* Filter panel — overflow: visible so dropdowns show */}
+      <div style={{
+        maxHeight: showFilters ? 500 : 0,
+        overflow: showFilters ? "visible" : "hidden",
+        transition: "max-height 0.35s ease",
+        marginBottom: showFilters ? "1.2rem" : 0,
+      }}>
+        <div className="e-glass-card" style={{ padding: "1.2rem 1.4rem", background: "rgba(255,255,255,0.88)", backdropFilter: "blur(8px)", display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: "1rem", alignItems: "end" }}>
+          <div>
+            <label style={{ display: "block", fontSize: "0.6rem", letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--e-muted)", fontWeight: 700, marginBottom: 6, fontFamily: "var(--e-sans)" }}>Tìm Kiếm</label>
+            <div style={{ position: "relative" }}>
+              <Search size={13} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--e-light-muted)" }} />
+              <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Tên hoặc địa chỉ..."
+                style={{ width: "100%", padding: "9px 12px 9px 30px", border: "1px solid rgba(154,124,69,0.25)", borderRadius: "8px", background: "rgba(255,255,255,0.92)", fontFamily: "var(--e-sans)", fontSize: "0.84rem", color: "var(--e-charcoal)", outline: "none" }}
+                onFocus={e => e.target.style.borderColor = "var(--e-gold)"}
+                onBlur={e => e.target.style.borderColor = "rgba(154,124,69,0.25)"}
+              />
+            </div>
+          </div>
+          <AnimatedSelect label="Loại Hình" value={typeFilter} onChange={v => setTypeFilter(v as PropFilter)} icon={Home}
+            options={[
+              { value: "all", label: "Tất cả" }, { value: "apartment", label: "Căn hộ" },
+              { value: "house", label: "Nhà phố" }, { value: "villa", label: "Biệt thự" },
+              { value: "studio", label: "Studio" }, { value: "office", label: "Văn phòng" },
+            ]}
+          />
+          <AnimatedSelect label="Sắp Xếp" value={sortBy} onChange={setSortBy} icon={SlidersHorizontal}
+            options={[
+              { value: "newest", label: "Mới nhất" }, { value: "oldest", label: "Cũ nhất" },
+              { value: "price_asc", label: "Giá tăng dần" }, { value: "price_desc", label: "Giá giảm dần" },
+            ]}
+          />
+        </div>
+      </div>
+
+      {loading ? (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "40vh", gap: "0.6rem", color: "var(--e-light-muted)", fontFamily: "var(--e-sans)", fontSize: "0.85rem" }}>
+          <LoaderCircle size={16} className="animate-spin" /> Đang tải…
+        </div>
+      ) : filtered.length > 0 ? (
+        <>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            {filtered.map(p => (
+              <PropertyModerationRow key={p._id} property={p} onApprove={handleApprove(p._id)} onReject={handleReject(p._id)} isLoading={processedId === p._id} />
+            ))}
+          </div>
+          <div style={{ display: "flex", justifyContent: "center", gap: "0.5rem", marginTop: "1.5rem" }}>
+            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+              style={{ padding: "8px 18px", borderRadius: "8px", border: "1px solid rgba(154,124,69,0.2)", background: "rgba(255,255,255,0.85)", color: "var(--e-charcoal)", cursor: page === 1 ? "not-allowed" : "pointer", opacity: page === 1 ? 0.4 : 1, fontFamily: "var(--e-sans)", fontSize: "0.74rem", fontWeight: 600 }}>← Trước</button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+              <button key={p} onClick={() => setPage(p)}
+                style={{ width: 38, height: 38, borderRadius: "8px", border: "none", background: p === page ? "var(--e-charcoal)" : "rgba(255,255,255,0.85)", color: p === page ? "#fff" : "var(--e-charcoal)", cursor: "pointer", fontFamily: "var(--e-sans)", fontSize: "0.8rem", fontWeight: 700 }}>{p}</button>
+            ))}
+            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+              style={{ padding: "8px 18px", borderRadius: "8px", border: "1px solid rgba(154,124,69,0.2)", background: "rgba(255,255,255,0.85)", color: "var(--e-charcoal)", cursor: page === totalPages ? "not-allowed" : "pointer", opacity: page === totalPages ? 0.4 : 1, fontFamily: "var(--e-sans)", fontSize: "0.74rem", fontWeight: 600 }}>Sau →</button>
+          </div>
+        </>
+      ) : (
+        <div style={{ textAlign: "center", padding: "5rem 2rem", background: "rgba(255,255,255,0.85)", borderRadius: "14px", border: "1px solid rgba(154,124,69,0.15)", backdropFilter: "blur(8px)" }}>
+          <CheckCircle size={36} style={{ color: "#2E8B75", marginBottom: "1rem" }} />
+          <p style={{ fontSize: "1rem", color: "var(--e-light-muted)", fontFamily: "var(--e-sans)" }}>
+            {search || typeFilter !== "all" ? "Không tìm thấy kết quả phù hợp" : "Không có bất động sản chờ duyệt"}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PROVIDER MODERATION ROW
+═══════════════════════════════════════════════════════════ */
+function ProviderModerationRow({ provider, onApprove, onReject, isLoading }: {
+  provider: User; onApprove: () => Promise<void>;
+  onReject: (reason: string) => Promise<void>; isLoading: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason] = useState("");
+
+  const handleReject = async () => {
+    if (!reason.trim()) { alert("Vui lòng nhập lý do từ chối."); return; }
+    await onReject(reason);
+  };
+
+  return (
+    <div className="e-glass-card" style={{ background: "rgba(255,255,255,0.90)", backdropFilter: "blur(8px)", overflow: "hidden" }}>
+      <div style={{ padding: "1.4rem 1.8rem", display: "flex", alignItems: "flex-start", gap: "1.2rem" }}>
+        <div style={{ width: 52, height: 52, borderRadius: "12px", background: "linear-gradient(135deg, var(--e-gold), var(--e-gold-light))", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontFamily: "var(--e-serif)", fontSize: "1.3rem", fontWeight: 600, flexShrink: 0 }}>
+          {provider.name?.charAt(0)?.toUpperCase()}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h3 style={{ fontFamily: "var(--e-sans)", fontSize: "1rem", fontWeight: 700, color: "var(--e-charcoal)", marginBottom: 3, lineHeight: 1.3 }}>{provider.name}</h3>
+          <p style={{ fontSize: "0.76rem", color: "var(--e-light-muted)", marginBottom: 6, fontFamily: "var(--e-sans)" }}>{provider.email}</p>
+          <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", alignItems: "center" }}>
+            {provider.phone && <span style={{ fontSize: "0.72rem", color: "var(--e-muted)", fontFamily: "var(--e-sans)" }}>📞 {provider.phone}</span>}
+            {provider.address && <span style={{ fontSize: "0.72rem", color: "var(--e-muted)", fontFamily: "var(--e-sans)" }}>📍 {provider.address}</span>}
+            <span style={{ fontSize: "0.6rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--e-gold)", border: "1px solid rgba(154,124,69,0.3)", padding: "2px 8px", borderRadius: "5px", fontFamily: "var(--e-sans)" }}>
+              {provider.kycStatus || "pending"}
+            </span>
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexShrink: 0 }}>
+          <button onClick={() => setExpanded(v => !v)}
+            style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 13px", border: "1px solid rgba(154,124,69,0.2)", background: expanded ? "rgba(154,124,69,0.06)" : "transparent", borderRadius: "8px", cursor: "pointer", fontFamily: "var(--e-sans)", fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--e-charcoal)", transition: "all 0.2s" }}>
+            {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />} Tài Liệu
+          </button>
+          <button onClick={() => setRejecting(v => !v)} disabled={isLoading}
+            style={{ padding: "7px 13px", border: "1px solid rgba(184,74,42,0.25)", background: rejecting ? "rgba(184,74,42,0.08)" : "transparent", borderRadius: "8px", cursor: "pointer", fontFamily: "var(--e-sans)", fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#b84a2a", transition: "all 0.2s" }}>
+            Từ Chối
+          </button>
+          <button onClick={onApprove} disabled={isLoading}
+            style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 15px", background: "#2E8B75", color: "#fff", border: "none", borderRadius: "8px", cursor: isLoading ? "not-allowed" : "pointer", fontFamily: "var(--e-sans)", fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", opacity: isLoading ? 0.6 : 1, transition: "all 0.2s" }}
+            onMouseEnter={e => { if (!isLoading) e.currentTarget.style.background = "#1e6b57"; }}
+            onMouseLeave={e => { if (!isLoading) e.currentTarget.style.background = "#2E8B75"; }}>
+            {isLoading ? <LoaderCircle size={12} className="animate-spin" /> : <ShieldCheck size={12} />} Xác Minh
+          </button>
+        </div>
+      </div>
+
+      <div style={{ maxHeight: rejecting ? 130 : 0, overflow: "hidden", transition: "max-height 0.3s ease" }}>
+        <div style={{ borderTop: "1px solid rgba(184,74,42,0.15)", background: "rgba(184,74,42,0.03)", padding: "1rem 1.8rem", display: "flex", gap: "0.75rem" }}>
+          <textarea rows={2} value={reason} onChange={e => setReason(e.target.value)} placeholder="Nhập lý do từ chối provider này..."
+            style={{ flex: 1, padding: "9px 12px", border: "1px solid rgba(184,74,42,0.25)", borderRadius: "8px", background: "#fff", fontFamily: "var(--e-sans)", fontSize: "0.84rem", color: "var(--e-charcoal)", outline: "none", resize: "vertical", minHeight: 56 }}
+            onFocus={e => e.target.style.borderColor = "#b84a2a"}
+            onBlur={e => e.target.style.borderColor = "rgba(184,74,42,0.25)"}
+          />
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+            <button onClick={handleReject} style={{ padding: "8px 16px", background: "#b84a2a", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer", fontFamily: "var(--e-sans)", fontSize: "0.66rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" }}>Xác Nhận</button>
+            <button onClick={() => { setRejecting(false); setReason(""); }} style={{ padding: "8px 16px", background: "transparent", color: "var(--e-muted)", border: "1px solid rgba(0,0,0,0.1)", borderRadius: "8px", cursor: "pointer", fontFamily: "var(--e-sans)", fontSize: "0.66rem", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase" }}>Hủy</button>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ maxHeight: expanded ? 300 : 0, overflow: "hidden", transition: "max-height 0.4s ease" }}>
+        <div style={{ borderTop: "1px solid rgba(154,124,69,0.1)", padding: "1.2rem 1.8rem", background: "rgba(255,252,248,0.5)" }}>
+          <p style={{ fontSize: "0.6rem", letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--e-gold)", fontWeight: 700, marginBottom: 10, fontFamily: "var(--e-sans)" }}>Tài Liệu CCCD</p>
+          {provider.kycDocuments?.length ? (
+            <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+              {provider.kycDocuments.map((url, i) => (
+                <a key={i} href={url} target="_blank" rel="noreferrer" style={{ display: "block", width: 160, height: 110, borderRadius: "10px", overflow: "hidden", border: "1px solid rgba(154,124,69,0.2)" }}>
+                  <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", transition: "transform 0.3s" }}
+                    onMouseEnter={e => e.currentTarget.style.transform = "scale(1.05)"}
+                    onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"} />
+                </a>
+              ))}
+            </div>
+          ) : <p style={{ fontSize: "0.82rem", color: "var(--e-light-muted)", fontFamily: "var(--e-sans)" }}>Chưa có tài liệu KYC.</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PROVIDERS VIEW
+═══════════════════════════════════════════════════════════ */
+function ProvidersView() {
+  const [providers, setProviders] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [processedId, setProcessedId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [kycFilter, setKycFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("newest");
+  const [showFilters, setShowFilters] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await adminService.getPendingProviders(page, 20);
+      setProviders(res.data.providers);
+      setTotalPages(res.totalPages || 1);
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); }
+  }, [page]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const filtered = useMemo(() => {
+    let list = [...providers];
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(p => p.name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q));
+    }
+    if (kycFilter !== "all") list = list.filter(p => (p.kycStatus || "pending") === kycFilter);
+    if (sortBy === "name_asc") list.sort((a, b) => a.name.localeCompare(b.name));
+    else if (sortBy === "name_desc") list.sort((a, b) => b.name.localeCompare(a.name));
+    return list;
+  }, [providers, search, kycFilter, sortBy]);
+
+  const handleApprove = (id: string) => async () => {
+    setProcessedId(id);
+    try { await adminService.verifyProvider(id, { isVerified: true }); setProviders(p => p.filter(x => x._id !== id)); alert("Xác minh thành công"); }
+    catch (e: any) { alert(e.message || "Lỗi"); }
+    finally { setProcessedId(null); }
+  };
+
+  const handleReject = (id: string) => async (reason: string) => {
+    setProcessedId(id);
+    try { await adminService.verifyProvider(id, { isVerified: false, kycRejectionReason: reason }); setProviders(p => p.filter(x => x._id !== id)); alert("Đã từ chối"); }
+    catch (e: any) { alert(e.message || "Lỗi"); }
+    finally { setProcessedId(null); }
+  };
+
+  return (
+    <div style={{ padding: "2.5rem 2.5vw" }}>
+      <div style={{ marginBottom: "1.5rem", paddingBottom: "1.5rem", borderBottom: "1px solid rgba(154,124,69,0.15)", display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem" }}>
+        <div>
+          <p style={{ fontSize: "0.6rem", letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--e-gold)", fontWeight: 700, marginBottom: 6, fontFamily: "var(--e-sans)" }}>Quản Lý</p>
+          <h2 style={{ fontFamily: "var(--e-serif)", fontSize: "clamp(1.5rem, 2.5vw, 2rem)", fontWeight: 500, color: "var(--e-charcoal)", margin: 0 }}>
+            Xác Minh <span style={{ fontFamily: "var(--e-sans)", fontWeight: 400, color: "var(--e-light-muted)", fontSize: "clamp(1.1rem, 2vw, 1.5rem)" }}>Nhà Cung Cấp</span>
+          </h2>
+        </div>
+        <div style={{ display: "flex", gap: "0.5rem" }}>
+          <span style={{ fontSize: "0.6rem", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--e-gold)", border: "1px solid rgba(154,124,69,0.3)", padding: "5px 12px", background: "rgba(154,124,69,0.06)", borderRadius: "6px", fontFamily: "var(--e-sans)", display: "flex", alignItems: "center" }}>
+            {filtered.length} đang chờ
+          </span>
+          <button onClick={() => setShowFilters(v => !v)}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", background: showFilters ? "var(--e-charcoal)" : "rgba(255,255,255,0.85)", border: "1px solid rgba(154,124,69,0.2)", borderRadius: "8px", cursor: "pointer", fontFamily: "var(--e-sans)", fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: showFilters ? "#fff" : "var(--e-charcoal)", transition: "all 0.2s" }}>
+            <SlidersHorizontal size={13} /> Bộ Lọc
+          </button>
+        </div>
+      </div>
+
+      {/* Filter panel — overflow: visible so dropdowns show */}
+      <div style={{
+        maxHeight: showFilters ? 500 : 0,
+        overflow: showFilters ? "visible" : "hidden",
+        transition: "max-height 0.35s ease",
+        marginBottom: showFilters ? "1.2rem" : 0,
+      }}>
+        <div className="e-glass-card" style={{ padding: "1.2rem 1.4rem", background: "rgba(255,255,255,0.88)", backdropFilter: "blur(8px)", display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: "1rem", alignItems: "end" }}>
+          <div>
+            <label style={{ display: "block", fontSize: "0.6rem", letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--e-muted)", fontWeight: 700, marginBottom: 6, fontFamily: "var(--e-sans)" }}>Tìm Kiếm</label>
+            <div style={{ position: "relative" }}>
+              <Search size={13} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--e-light-muted)" }} />
+              <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Tên hoặc email..."
+                style={{ width: "100%", padding: "9px 12px 9px 30px", border: "1px solid rgba(154,124,69,0.25)", borderRadius: "8px", background: "rgba(255,255,255,0.92)", fontFamily: "var(--e-sans)", fontSize: "0.84rem", color: "var(--e-charcoal)", outline: "none" }}
+                onFocus={e => e.target.style.borderColor = "var(--e-gold)"}
+                onBlur={e => e.target.style.borderColor = "rgba(154,124,69,0.25)"}
+              />
+            </div>
+          </div>
+          <AnimatedSelect label="Trạng Thái KYC" value={kycFilter} onChange={setKycFilter} icon={ShieldCheck}
+            options={[
+              { value: "all", label: "Tất cả" }, { value: "pending", label: "Chờ xử lý" },
+              { value: "submitted", label: "Đã nộp" }, { value: "reviewing", label: "Đang xem xét" },
+              { value: "rejected", label: "Từ chối" },
+            ]}
+          />
+          <AnimatedSelect label="Sắp Xếp" value={sortBy} onChange={setSortBy} icon={SlidersHorizontal}
+            options={[
+              { value: "newest", label: "Mới nhất" }, { value: "oldest", label: "Cũ nhất" },
+              { value: "name_asc", label: "Tên A→Z" }, { value: "name_desc", label: "Tên Z→A" },
+            ]}
+          />
+        </div>
+      </div>
+
+      {loading ? (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "40vh", gap: "0.6rem", color: "var(--e-light-muted)", fontFamily: "var(--e-sans)", fontSize: "0.85rem" }}>
+          <LoaderCircle size={16} className="animate-spin" /> Đang tải…
+        </div>
+      ) : filtered.length > 0 ? (
+        <>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            {filtered.map(p => (
+              <ProviderModerationRow key={p._id} provider={p} onApprove={handleApprove(p._id)} onReject={handleReject(p._id)} isLoading={processedId === p._id} />
+            ))}
+          </div>
+          <div style={{ display: "flex", justifyContent: "center", gap: "0.5rem", marginTop: "1.5rem" }}>
+            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+              style={{ padding: "8px 18px", borderRadius: "8px", border: "1px solid rgba(154,124,69,0.2)", background: "rgba(255,255,255,0.85)", color: "var(--e-charcoal)", cursor: page === 1 ? "not-allowed" : "pointer", opacity: page === 1 ? 0.4 : 1, fontFamily: "var(--e-sans)", fontSize: "0.74rem", fontWeight: 600 }}>← Trước</button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+              <button key={p} onClick={() => setPage(p)}
+                style={{ width: 38, height: 38, borderRadius: "8px", border: "none", background: p === page ? "var(--e-charcoal)" : "rgba(255,255,255,0.85)", color: p === page ? "#fff" : "var(--e-charcoal)", cursor: "pointer", fontFamily: "var(--e-sans)", fontSize: "0.8rem", fontWeight: 700 }}>{p}</button>
+            ))}
+            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+              style={{ padding: "8px 18px", borderRadius: "8px", border: "1px solid rgba(154,124,69,0.2)", background: "rgba(255,255,255,0.85)", color: "var(--e-charcoal)", cursor: page === totalPages ? "not-allowed" : "pointer", opacity: page === totalPages ? 0.4 : 1, fontFamily: "var(--e-sans)", fontSize: "0.74rem", fontWeight: 600 }}>Sau →</button>
+          </div>
+        </>
+      ) : (
+        <div style={{ textAlign: "center", padding: "5rem 2rem", background: "rgba(255,255,255,0.85)", borderRadius: "14px", border: "1px solid rgba(154,124,69,0.15)", backdropFilter: "blur(8px)" }}>
+          <CheckCircle size={36} style={{ color: "#2E8B75", marginBottom: "1rem" }} />
+          <p style={{ fontSize: "1rem", color: "var(--e-light-muted)", fontFamily: "var(--e-sans)" }}>
+            {search || kycFilter !== "all" ? "Không tìm thấy kết quả phù hợp" : "Không có nhà cung cấp chờ xác minh"}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   KYC VIEW
+═══════════════════════════════════════════════════════════ */
+function KycView() {
+  const { token } = useAuth();
+  const [users, setUsers] = useState<User[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<KycStatusFilter>("submitted");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("newest");
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>("provider");
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
+
+  const selectedUser = useMemo(() => users.find(u => u._id === selectedUserId) || null, [selectedUserId, users]);
+
+  const loadUsers = useCallback(async () => {
+    if (!token) return;
+    setLoading(true); setErrorMessage(null); setSuccessMessage(null);
+    try {
+      const res = await userService.getUsersForKycReview(token, { role: roleFilter, kycStatus: statusFilter, sort: sortOrder, limit: 100 });
+      setUsers(res.data.users);
+      if (res.data.users.length === 0) setSelectedUserId(null);
+      else if (!res.data.users.some(u => u._id === selectedUserId)) setSelectedUserId(res.data.users[0]._id);
+    } catch (err) { setErrorMessage(getErrorMessage(err)); }
+    finally { setLoading(false); }
+  }, [roleFilter, selectedUserId, sortOrder, statusFilter, token]);
+
+  useEffect(() => { void loadUsers(); }, [loadUsers]);
+  useEffect(() => { setRejectionReason(selectedUser?.kycRejectionReason || ""); }, [selectedUser]);
+
+  const handleApprove = async () => {
+    if (!token || !selectedUser) return;
+    setActionLoading(true); setErrorMessage(null); setSuccessMessage(null);
+    try {
+      await userService.updateUserKycStatus(token, selectedUser._id, { isVerified: true, kycStatus: "verified" });
+      setSuccessMessage("Đã duyệt KYC thành công."); await loadUsers();
+    } catch (err) { setErrorMessage(getErrorMessage(err)); }
+    finally { setActionLoading(false); }
+  };
+
+  const handleReject = async () => {
+    if (!token || !selectedUser) return;
+    if (!rejectionReason.trim()) { setErrorMessage("Vui lòng nhập lý do từ chối."); return; }
+    setActionLoading(true); setErrorMessage(null); setSuccessMessage(null);
+    try {
+      await userService.updateUserKycStatus(token, selectedUser._id, { isVerified: false, kycStatus: "rejected", kycRejectionReason: rejectionReason.trim() });
+      setSuccessMessage("Đã từ chối KYC."); await loadUsers();
+    } catch (err) { setErrorMessage(getErrorMessage(err)); }
+    finally { setActionLoading(false); }
+  };
+
+  return (
+    <div style={{ padding: "2.5rem 2.5vw" }}>
+      <div style={{ marginBottom: "1.5rem", paddingBottom: "1.5rem", borderBottom: "1px solid rgba(154,124,69,0.15)", display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem" }}>
+        <div>
+          <p style={{ fontSize: "0.6rem", letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--e-gold)", fontWeight: 700, marginBottom: 6, fontFamily: "var(--e-sans)" }}>Quản Lý</p>
+          <h2 style={{ fontFamily: "var(--e-serif)", fontSize: "clamp(1.5rem, 2.5vw, 2rem)", fontWeight: 500, color: "var(--e-charcoal)", margin: 0 }}>
+            Quản Lý <span style={{ fontFamily: "var(--e-sans)", fontWeight: 400, color: "var(--e-light-muted)", fontSize: "clamp(1.1rem, 2vw, 1.5rem)" }}>KYC</span>
+          </h2>
+        </div>
+        <button onClick={() => void loadUsers()}
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 18px", background: "rgba(255,255,255,0.85)", border: "1px solid rgba(154,124,69,0.2)", borderRadius: "8px", cursor: "pointer", fontFamily: "var(--e-sans)", fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--e-charcoal)", transition: "all 0.2s" }}
+          onMouseEnter={e => { e.currentTarget.style.background = "var(--e-charcoal)"; e.currentTarget.style.color = "#fff"; }}
+          onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.85)"; e.currentTarget.style.color = "var(--e-charcoal)"; }}
+        >
+          <RefreshCcw size={13} /> Làm Mới
+        </button>
+      </div>
+
+      {/* Filters */}
+      <div className="e-glass-card" style={{ padding: "1.4rem", marginBottom: "1.5rem", background: "rgba(255,255,255,0.85)", backdropFilter: "blur(8px)", overflow: "visible" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1rem" }}>
+          <AnimatedSelect label="Trạng Thái" value={statusFilter} onChange={v => setStatusFilter(v as KycStatusFilter)} icon={ShieldCheck}
+            options={[
+              { value: "all", label: "Tất cả" }, { value: "submitted", label: "Đã nộp" },
+              { value: "reviewing", label: "Đang xem xét" }, { value: "rejected", label: "Từ chối" },
+              { value: "verified", label: "Đã xác minh" }, { value: "pending", label: "Chờ" },
+            ]}
+          />
+          <AnimatedSelect label="Vai Trò" value={roleFilter} onChange={v => setRoleFilter(v as RoleFilter)} icon={Users}
+            options={[{ value: "provider", label: "Provider" }, { value: "user", label: "Người dùng" }]}
+          />
+          <AnimatedSelect label="Sắp Xếp" value={sortOrder} onChange={v => setSortOrder(v as SortOrder)} icon={SlidersHorizontal}
+            options={[{ value: "newest", label: "Mới nhất" }, { value: "oldest", label: "Cũ nhất" }]}
+          />
+        </div>
+      </div>
+
+      {errorMessage && <div style={{ marginBottom: "1rem", border: "1px solid rgba(184,74,42,0.3)", background: "rgba(184,74,42,0.06)", padding: "0.8rem 1rem", fontSize: "0.82rem", color: "#b84a2a", borderRadius: "8px", fontFamily: "var(--e-sans)" }}>{errorMessage}</div>}
+      {successMessage && <div style={{ marginBottom: "1rem", border: "1px solid rgba(45,122,79,0.3)", background: "rgba(45,122,79,0.06)", padding: "0.8rem 1rem", fontSize: "0.82rem", color: "#2d7a4f", borderRadius: "8px", fontFamily: "var(--e-sans)" }}>{successMessage}</div>}
+
+      {loading ? (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "40vh", gap: "0.6rem", color: "var(--e-light-muted)", fontFamily: "var(--e-sans)", fontSize: "0.85rem" }}>
+          <LoaderCircle size={16} className="animate-spin" /> Đang tải…
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "1rem", alignItems: "start" }}>
+          {/* List */}
+          <div className="e-glass-card" style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(8px)", overflow: "hidden" }}>
+            <div style={{ padding: "1.2rem 1.6rem", borderBottom: "1px solid rgba(154,124,69,0.1)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <UserRoundSearch size={16} color="var(--e-gold)" />
+                <h3 style={{ fontFamily: "var(--e-sans)", fontSize: "0.95rem", fontWeight: 700, color: "var(--e-charcoal)", margin: 0 }}>Hàng Chờ KYC</h3>
+              </div>
+              <span style={{ fontSize: "0.7rem", color: "var(--e-muted)", fontFamily: "var(--e-sans)" }}>{users.length} hồ sơ</span>
+            </div>
+            {users.length ? (
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid rgba(154,124,69,0.1)" }}>
+                      {["Người dùng", "Vai trò", "KYC", "Xác minh", "Ngày tạo"].map(h => (
+                        <th key={h} style={{ padding: "0.8rem 1rem", textAlign: "left", fontSize: "0.58rem", letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--e-muted)", fontWeight: 700, fontFamily: "var(--e-sans)" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.map(u => (
+                      <tr key={u._id} onClick={() => setSelectedUserId(u._id)}
+                        style={{ borderBottom: "1px solid rgba(154,124,69,0.06)", cursor: "pointer", background: u._id === selectedUserId ? "rgba(154,124,69,0.06)" : "transparent", transition: "background 0.15s" }}
+                        onMouseEnter={e => { if (u._id !== selectedUserId) e.currentTarget.style.background = "rgba(154,124,69,0.03)"; }}
+                        onMouseLeave={e => { if (u._id !== selectedUserId) e.currentTarget.style.background = "transparent"; }}
+                      >
+                        <td style={{ padding: "0.9rem 1rem" }}>
+                          <p style={{ fontWeight: 700, color: "var(--e-charcoal)", margin: 0, fontFamily: "var(--e-sans)", fontSize: "0.84rem" }}>{u.name}</p>
+                          <p style={{ fontSize: "0.7rem", color: "var(--e-light-muted)", margin: 0, fontFamily: "var(--e-sans)" }}>{u.email}</p>
+                        </td>
+                        <td style={{ padding: "0.9rem 1rem", color: "var(--e-muted)", fontFamily: "var(--e-sans)", fontSize: "0.78rem" }}>{u.role}</td>
+                        <td style={{ padding: "0.9rem 1rem" }}><KycStatusBadge status={u.kycStatus} /></td>
+                        <td style={{ padding: "0.9rem 1rem" }}>
+                          {u.isVerified
+                            ? <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "#2E8B75", fontSize: "0.78rem", fontFamily: "var(--e-sans)", fontWeight: 600 }}><CheckCircle2 size={12} /> Có</span>
+                            : <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--e-light-muted)", fontSize: "0.78rem", fontFamily: "var(--e-sans)" }}><ShieldAlert size={12} /> Không</span>
+                          }
+                        </td>
+                        <td style={{ padding: "0.9rem 1rem", fontSize: "0.7rem", color: "var(--e-light-muted)", fontFamily: "var(--e-sans)" }}>{formatDate(u.createdAt)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div style={{ padding: "3rem 2rem", textAlign: "center" }}>
+                <p style={{ fontSize: "0.9rem", color: "var(--e-light-muted)", fontFamily: "var(--e-sans)" }}>Không tìm thấy hồ sơ nào.</p>
+              </div>
+            )}
+          </div>
+
+          {/* Detail panel */}
+          <div className="e-glass-card" style={{ background: "rgba(255,255,255,0.88)", backdropFilter: "blur(8px)", position: "sticky", top: 100 }}>
+            {selectedUser ? (
+              <div style={{ padding: "1.8rem" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem", marginBottom: "1.2rem" }}>
+                  <div>
+                    <h3 style={{ fontFamily: "var(--e-serif)", fontSize: "1.2rem", fontWeight: 500, color: "var(--e-charcoal)", margin: 0, marginBottom: 4 }}>{selectedUser.name}</h3>
+                    <p style={{ fontSize: "0.78rem", color: "var(--e-muted)", margin: 0, fontFamily: "var(--e-sans)" }}>{selectedUser.email}</p>
+                  </div>
+                  <KycStatusBadge status={selectedUser.kycStatus} />
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginBottom: "1.2rem", padding: "1rem", background: "rgba(154,124,69,0.04)", borderRadius: "10px", border: "1px solid rgba(154,124,69,0.1)" }}>
+                  {[{ label: "Địa chỉ", value: selectedUser.address || "N/A" }, { label: "Điện thoại", value: selectedUser.phone || "Chưa có" }, { label: "Vai trò", value: selectedUser.role }, { label: "Xác minh", value: selectedUser.isVerified ? "Có" : "Không" }].map(item => (
+                    <div key={item.label} style={{ display: "flex", gap: "0.5rem", fontSize: "0.8rem", fontFamily: "var(--e-sans)" }}>
+                      <span style={{ fontWeight: 700, color: "var(--e-charcoal)", minWidth: 80 }}>{item.label}:</span>
+                      <span style={{ color: "var(--e-muted)" }}>{item.value}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ marginBottom: "1.2rem" }}>
+                  <p style={{ fontSize: "0.6rem", letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--e-muted)", fontWeight: 700, marginBottom: 8, fontFamily: "var(--e-sans)" }}>Tài Liệu CCCD</p>
+                  {selectedUser.kycDocuments?.length ? (
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
+                      {selectedUser.kycDocuments.map((url, idx) => (
+                        <a key={idx} href={url} target="_blank" rel="noreferrer" style={{ display: "block", overflow: "hidden", borderRadius: "8px", border: "1px solid rgba(154,124,69,0.15)" }}>
+                          <img src={url} alt={`KYC ${idx + 1}`} style={{ width: "100%", height: 90, objectFit: "cover", display: "block", transition: "transform 0.3s" }}
+                            onMouseEnter={e => e.currentTarget.style.transform = "scale(1.04)"}
+                            onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"} />
+                        </a>
+                      ))}
+                    </div>
+                  ) : <p style={{ fontSize: "0.8rem", color: "var(--e-light-muted)", fontFamily: "var(--e-sans)" }}>Chưa có tài liệu.</p>}
+                </div>
+
+                <div style={{ marginBottom: "1.2rem" }}>
+                  <p style={{ fontSize: "0.6rem", letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--e-muted)", fontWeight: 700, marginBottom: 6, fontFamily: "var(--e-sans)" }}>Dữ Liệu OCR</p>
+                  <pre style={{ maxHeight: 110, overflowY: "auto", background: "var(--e-charcoal)", color: "#e2e8f0", padding: "0.8rem", borderRadius: "8px", fontSize: "0.68rem", margin: 0, lineHeight: 1.5 }}>{prettyJson(selectedUser.kycExtractedData)}</pre>
+                </div>
+
+                {selectedUser.kycRejectionReason && (
+                  <div style={{ marginBottom: "1rem", border: "1px solid rgba(184,74,42,0.3)", background: "rgba(184,74,42,0.06)", padding: "0.8rem 1rem", borderRadius: "8px" }}>
+                    <p style={{ fontSize: "0.6rem", letterSpacing: "0.14em", textTransform: "uppercase", color: "#b84a2a", fontWeight: 700, marginBottom: 4, fontFamily: "var(--e-sans)" }}>Lý Do Từ Chối</p>
+                    <p style={{ fontSize: "0.8rem", color: "#b84a2a", margin: 0, fontFamily: "var(--e-sans)" }}>{selectedUser.kycRejectionReason}</p>
+                  </div>
+                )}
+
+                <div style={{ marginBottom: "1rem" }}>
+                  <label style={{ display: "block", fontSize: "0.6rem", letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--e-muted)", fontWeight: 700, marginBottom: 6, fontFamily: "var(--e-sans)" }}>Lý Do Từ Chối (nếu cần)</label>
+                  <textarea rows={3} value={rejectionReason} onChange={e => setRejectionReason(e.target.value)} placeholder="Bắt buộc khi từ chối KYC"
+                    style={{ width: "100%", padding: "10px 12px", border: "1px solid rgba(154,124,69,0.25)", borderRadius: "8px", background: "rgba(255,252,248,0.9)", fontFamily: "var(--e-sans)", fontSize: "0.84rem", color: "var(--e-charcoal)", outline: "none", resize: "vertical", minHeight: 72 }}
+                    onFocus={e => e.target.style.borderColor = "var(--e-gold)"}
+                    onBlur={e => e.target.style.borderColor = "rgba(154,124,69,0.25)"}
+                  />
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
+                  <button type="button" disabled={actionLoading} onClick={() => void handleApprove()}
+                    style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "11px", background: "#2E8B75", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer", fontFamily: "var(--e-sans)", fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", opacity: actionLoading ? 0.7 : 1, transition: "background 0.2s" }}
+                    onMouseEnter={e => { if (!actionLoading) e.currentTarget.style.background = "#1e6b57"; }}
+                    onMouseLeave={e => { if (!actionLoading) e.currentTarget.style.background = "#2E8B75"; }}>
+                    {actionLoading ? <LoaderCircle size={13} className="animate-spin" /> : <ShieldCheck size={13} />} Duyệt KYC
+                  </button>
+                  <button type="button" disabled={actionLoading} onClick={() => void handleReject()}
+                    style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "11px", background: "rgba(184,74,42,0.08)", color: "#b84a2a", border: "1px solid rgba(184,74,42,0.3)", borderRadius: "8px", cursor: "pointer", fontFamily: "var(--e-sans)", fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", opacity: actionLoading ? 0.7 : 1, transition: "all 0.2s" }}
+                    onMouseEnter={e => { if (!actionLoading) { e.currentTarget.style.background = "#b84a2a"; e.currentTarget.style.color = "#fff"; } }}
+                    onMouseLeave={e => { if (!actionLoading) { e.currentTarget.style.background = "rgba(184,74,42,0.08)"; e.currentTarget.style.color = "#b84a2a"; } }}>
+                    {actionLoading ? <LoaderCircle size={13} className="animate-spin" /> : <XCircle size={13} />} Từ Chối
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ padding: "3rem", textAlign: "center" }}>
+                <p style={{ fontSize: "0.88rem", color: "var(--e-light-muted)", fontFamily: "var(--e-sans)" }}>Chọn người dùng để xem chi tiết KYC.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   NAV + MAIN PAGE
+═══════════════════════════════════════════════════════════ */
+const NAV_ITEMS: { view: View; label: string; icon: string }[] = [
+  { view: "dashboard", label: "Tổng Quan", icon: "▦" },
+  { view: "properties", label: "Duyệt Tin", icon: "✓" },
+  { view: "providers", label: "Xác Minh Provider", icon: "◈" },
+  { view: "kyc", label: "Quản Lý KYC", icon: "✦" },
+];
 
 export default function AdminDashboard() {
   const router = useRouter();
   const { user, isAuthLoading } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [view, setView] = useState<View>("dashboard");
 
   useEffect(() => {
-    const initDashboard = async () => {
+    const q = router.query.view as string | undefined;
+    if (q && ["dashboard", "properties", "providers", "kyc"].includes(q)) setView(q as View);
+  }, [router.query.view]);
+
+  const handleSetView = useCallback((newView: View) => {
+    setView(newView);
+    void router.replace({ pathname: "/admin/dashboard", query: newView === "dashboard" ? {} : { view: newView } }, undefined, { shallow: true });
+  }, [router]);
+
+  useEffect(() => {
+    const init = async () => {
       try {
-        if (!user || user.role !== "admin") {
-          router.push("/");
-          return;
-        }
-        const response = await adminService.getDashboardStats();
-        setStats(response.data);
-      } catch (error) {
-        console.error("Error loading dashboard:", error);
-      } finally {
-        setLoading(false);
-      }
+        if (!user || user.role !== "admin") { router.push("/"); return; }
+        const res = await adminService.getDashboardStats();
+        setStats(res.data);
+      } catch (err) { console.error(err); }
+      finally { setLoading(false); }
     };
-    if (!isAuthLoading) initDashboard();
+    if (!isAuthLoading) void init();
   }, [router, user, isAuthLoading]);
 
-  if (loading) {
-    return (
-      <div className="estoria" style={{ minHeight: '100vh', background: 'var(--e-cream)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{
-            width: 48, height: 48, border: '2px solid var(--e-beige)',
-            borderTopColor: 'var(--e-gold)', borderRadius: '50%',
-            animation: 'spin 0.8s linear infinite', margin: '0 auto',
-          }} />
-          <p style={{ marginTop: '1rem', fontSize: '0.8rem', color: 'var(--e-muted)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-            Đang tải…
-          </p>
-        </div>
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+  if (loading) return (
+    <div className="estoria" style={{ minHeight: "100vh", background: "var(--e-cream)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--e-sans)" }}>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ width: 44, height: 44, border: "2px solid rgba(154,124,69,0.2)", borderTopColor: "var(--e-gold)", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto" }} />
+        <p style={{ marginTop: "1rem", fontSize: "0.8rem", color: "var(--e-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Đang tải…</p>
       </div>
-    );
-  }
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
 
   return (
     <>
-      <Head>
-        <title>Admin Dashboard — Estoria</title>
-      </Head>
+      <Head><title>Admin Dashboard — Estoria</title></Head>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .e-glass-card {
+          background: #ffffff; border: 1px solid var(--e-beige); border-radius: 16px;
+          box-shadow: 0 4px 24px rgba(0,0,0,0.02);
+          transition: transform 0.3s cubic-bezier(0.4,0,0.2,1), box-shadow 0.3s cubic-bezier(0.4,0,0.2,1);
+          position: relative;
+        }
+        .e-glass-card:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(154,124,69,0.08); border-color: rgba(154,124,69,0.3); }
+      `}</style>
 
-      <div className="estoria" style={{ minHeight: '100vh', background: 'var(--e-cream)' }}>
+      <div className="estoria min-h-screen flex overflow-hidden font-[var(--e-sans)]">
 
         {/* ── Sidebar ── */}
-        <aside style={{
-          position: 'fixed', top: 0, left: 0, bottom: 0, width: 240,
-          background: 'var(--e-dark)',
-          borderRight: '1px solid rgba(140,110,63,0.12)',
-          display: 'flex', flexDirection: 'column',
-          zIndex: 50, padding: '2rem 0',
-        }}>
-          {/* Logo */}
-          <div style={{ padding: '0 1.8rem 2rem', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-            <Link href="/" style={{
-              fontFamily: 'var(--e-serif)', fontSize: '1.4rem', fontWeight: 600,
-              letterSpacing: '0.04em', color: 'var(--e-white)', textDecoration: 'none',
-            }}>
-              Esto<span style={{ color: 'var(--e-gold-light)' }}>ria</span>
-            </Link>
-            <div style={{
-              fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
-              color: 'rgba(255,255,255,0.25)', marginTop: 4,
-            }}>
-              Admin Control
-            </div>
-          </div>
+        <aside className="w-64 flex flex-col h-screen fixed top-0 left-0 z-50 shadow-2xl overflow-hidden"
+          style={{ backgroundImage: "url('https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=1600&q=85')", backgroundSize: "cover", backgroundPosition: "center" }}>
+          <div className="absolute inset-0 bg-black/55 pointer-events-none z-0" />
+          <div className="relative z-10 flex flex-col h-full">
 
-          {/* Nav */}
-          <nav style={{ flex: 1, padding: '1.5rem 0' }}>
-            {[
-              { href: '/admin/dashboard', label: 'Tổng Quan', icon: '▦' },
-              { href: '/admin/properties/pending', label: 'Duyệt Tin', icon: '✓', badge: stats?.pendingPropertiesCount },
-              { href: '/admin/providers/pending', label: 'Xác Minh Provider', icon: '◈', badge: stats?.totalPendingProviders },
-              { href: '/admin/kyc-management', label: 'Quản Lý KYC', icon: '✦' },
-            ].map((item) => (
-              <a key={item.href} href={item.href} style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '0.75rem 1.8rem',
-                fontSize: '0.78rem', fontWeight: 500, letterSpacing: '0.06em',
-                color: 'rgba(255,255,255,0.45)',
-                textDecoration: 'none',
-                transition: 'color 0.2s, background 0.2s',
-                borderLeft: '2px solid transparent',
-              }}
-                onMouseEnter={e => {
-                  (e.currentTarget as HTMLAnchorElement).style.color = 'var(--e-white)';
-                  (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(255,255,255,0.04)';
-                  (e.currentTarget as HTMLAnchorElement).style.borderLeftColor = 'var(--e-gold)';
-                }}
-                onMouseLeave={e => {
-                  (e.currentTarget as HTMLAnchorElement).style.color = 'rgba(255,255,255,0.45)';
-                  (e.currentTarget as HTMLAnchorElement).style.background = 'transparent';
-                  (e.currentTarget as HTMLAnchorElement).style.borderLeftColor = 'transparent';
-                }}
-              >
-                <span style={{ display: 'flex', alignItems: 'center', gap: '0.7rem' }}>
-                  <span style={{ fontSize: '0.9rem', opacity: 0.6 }}>{item.icon}</span>
-                  {item.label}
+            <div className="p-8 pb-4">
+              <Link href="/" className="flex items-center gap-2 no-underline group">
+                <span className="text-2xl font-extrabold text-white tracking-tighter" style={{ fontFamily: "var(--e-serif)" }}>
+                  Esto<span className="text-[var(--e-gold-light)] group-hover:text-white transition-colors">ria</span>
                 </span>
-                {item.badge != null && item.badge > 0 && (
-                  <span style={{
-                    fontSize: '0.6rem', fontWeight: 700,
-                    background: 'var(--e-gold)', color: 'var(--e-white)',
-                    padding: '2px 7px', borderRadius: 2, minWidth: 20, textAlign: 'center',
-                  }}>
-                    {item.badge}
-                  </span>
-                )}
-              </a>
-            ))}
-          </nav>
+              </Link>
+              <div className="text-[0.58rem] uppercase tracking-[0.22em] text-white/30 font-bold mt-1 ml-0.5" style={{ fontFamily: "var(--e-sans)" }}>Admin Control</div>
+            </div>
 
-          {/* User info */}
-          <div style={{ padding: '1.5rem 1.8rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-            <div style={{
-              fontSize: '0.6rem', letterSpacing: '0.14em', textTransform: 'uppercase',
-              color: 'var(--e-gold-light)', fontWeight: 600, marginBottom: 6,
-            }}>
-              Administrator
+            <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto custom-scrollbar">
+              {NAV_ITEMS.map(item => {
+                const isActive = view === item.view;
+                const badge = item.view === "properties" ? stats?.pendingPropertiesCount : item.view === "providers" ? stats?.totalPendingProviders : undefined;
+                return (
+                  <button key={item.view} onClick={() => handleSetView(item.view)}
+                    className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl transition-all duration-300 group ${isActive ? "bg-white/10 text-white shadow-[0_4px_12px_rgba(0,0,0,0.1)]" : "text-white/70 hover:text-white hover:bg-white/5"}`}
+                    style={{ fontFamily: "var(--e-sans)" }}>
+                    <span className={`transition-transform duration-300 ${isActive ? "text-[var(--e-gold-light)] scale-110" : "group-hover:scale-110"}`}>{item.icon}</span>
+                    <span className={`text-[0.8rem] font-semibold tracking-wide flex-1 text-left ${isActive ? "opacity-100" : "opacity-90"}`}>{item.label}</span>
+                    {badge != null && badge > 0 && (
+                      <span style={{ fontSize: "0.6rem", fontWeight: 700, background: "var(--e-gold)", color: "#fff", padding: "2px 7px", borderRadius: "4px", minWidth: 20, textAlign: "center" }}>{badge}</span>
+                    )}
+                    {isActive && !(badge && badge > 0) && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-[var(--e-gold-light)] shadow-[0_0_8px_var(--e-gold)]" />}
+                  </button>
+                );
+              })}
+
+              <div className="h-px bg-white/5 my-6 mx-2" />
+              <a href="/" className="flex items-center gap-3.5 px-4 py-3 text-white/30 hover:text-white/60 hover:bg-white/5 rounded-xl transition-all duration-300" style={{ fontFamily: "var(--e-sans)" }}>
+                <span className="opacity-90">←</span>
+                <span className="text-[0.78rem] font-medium">Về Trang Chủ</span>
+              </a>
+            </nav>
+
+            {/* User footer → profile/settings */}
+            <div className="p-4 mt-auto">
+              <Link href="/profile/settings" className="bg-white/5 rounded-2xl p-4 flex items-center gap-3 border border-white/5 group hover:bg-white/[0.08] transition-all cursor-pointer no-underline block">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[var(--e-gold)] to-[var(--e-gold-light)] flex items-center justify-center text-white text-sm font-bold shadow-lg flex-shrink-0 group-hover:scale-105 transition-transform" style={{ fontFamily: "var(--e-serif)" }}>
+                  {user?.name?.charAt(0)?.toUpperCase() ?? "A"}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[0.7rem] font-bold text-[var(--e-gold-light)] truncate leading-tight mb-0" style={{ fontFamily: "var(--e-sans)" }}>Administrator</p>
+                  <p className="text-[0.63rem] text-white/50 truncate mt-0.5 mb-0" style={{ fontFamily: "var(--e-sans)" }}>{user?.email}</p>
+                </div>
+              </Link>
             </div>
-            <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.5)' }}>
-              {user?.email}
-            </div>
-            <Link href="/" style={{
-              display: 'inline-block', marginTop: '1rem',
-              fontSize: '0.65rem', letterSpacing: '0.12em', textTransform: 'uppercase',
-              color: 'rgba(255,255,255,0.25)', textDecoration: 'none',
-              transition: 'color 0.2s',
-            }}
-              onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.color = 'var(--e-gold-light)'}
-              onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.color = 'rgba(255,255,255,0.25)'}
-            >
-              ← Về Trang Chủ
-            </Link>
           </div>
         </aside>
 
-        {/* ── Main Content ── */}
-        <main style={{ marginLeft: 240, padding: '3rem 3vw', minHeight: '100vh' }}>
+        {/* ── Main ── */}
+        <main className="flex-1 ml-64 min-h-screen relative overflow-y-auto">
+          <div style={{ position: "fixed", top: 0, left: "16rem", right: 0, bottom: 0, backgroundImage: "url('https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1600&q=80')", backgroundSize: "cover", backgroundPosition: "center", filter: "blur(4px) brightness(0.88)", transform: "scale(1.06)", zIndex: 0 }} />
+          <div style={{ position: "fixed", top: 0, left: "16rem", right: 0, bottom: 0, background: "rgba(255,252,248,0.88)", zIndex: 1 }} />
 
-          {/* Header */}
-          <div style={{ marginBottom: '2.5rem' }}>
-            <div className="e-section-label" style={{ marginBottom: '0.6rem' }}>Admin Dashboard</div>
-            <h1 style={{
-              fontFamily: 'var(--e-serif)',
-              fontSize: 'clamp(1.8rem, 3vw, 2.6rem)',
-              fontWeight: 500, color: 'var(--e-charcoal)',
-              lineHeight: 1.15,
-            }}>
-              Bảng <em style={{ fontStyle: 'italic', fontWeight: 400, color: 'var(--e-muted)' }}>Điều Khiển</em>
-            </h1>
-          </div>
-
-          {/* Pending Alerts */}
-          {((stats?.pendingPropertiesCount ?? 0) > 0 || (stats?.totalPendingProviders ?? 0) > 0) && (
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: (stats?.pendingPropertiesCount ?? 0) > 0 && (stats?.totalPendingProviders ?? 0) > 0 ? '1fr 1fr' : '1fr',
-              gap: 2, background: 'var(--e-beige)', marginBottom: '2rem',
-            }}>
-              {(stats?.pendingPropertiesCount ?? 0) > 0 && (
-                <Link href="/admin/properties/pending" style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '1rem 1.4rem',
-                  background: 'rgba(140,110,63,0.08)',
-                  border: '1px solid rgba(140,110,63,0.2)',
-                  textDecoration: 'none',
-                  transition: 'background 0.2s',
-                }}
-                  onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(140,110,63,0.14)'}
-                  onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(140,110,63,0.08)'}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ color: 'var(--e-gold)' }}>⚠</span>
-                    <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--e-charcoal)' }}>
-                      {stats?.pendingPropertiesCount} tin đang chờ duyệt
-                    </span>
-                  </div>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--e-gold)', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                    Duyệt Ngay →
-                  </span>
-                </Link>
-              )}
-              {(stats?.totalPendingProviders ?? 0) > 0 && (
-                <Link href="/admin/providers/pending" style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '1rem 1.4rem',
-                  background: 'rgba(140,110,63,0.08)',
-                  border: '1px solid rgba(140,110,63,0.2)',
-                  textDecoration: 'none',
-                  transition: 'background 0.2s',
-                }}
-                  onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(140,110,63,0.14)'}
-                  onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(140,110,63,0.08)'}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ color: 'var(--e-gold)' }}>◈</span>
-                    <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--e-charcoal)' }}>
-                      {stats?.totalPendingProviders} provider chờ xác minh
-                    </span>
-                  </div>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--e-gold)', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                    Xác Minh →
-                  </span>
-                </Link>
-              )}
+          <div className="relative z-10 p-8 md:p-12 min-h-full flex flex-col">
+            <div className="max-w-6xl w-full mx-auto flex-1">
+              {view === "dashboard" && <ViewWrapper><DashboardView stats={stats} onNavigate={handleSetView} /></ViewWrapper>}
+              {view === "properties" && <ViewWrapper><PropertiesView /></ViewWrapper>}
+              {view === "providers" && <ViewWrapper><ProvidersView /></ViewWrapper>}
+              {view === "kyc" && <ViewWrapper><KycView /></ViewWrapper>}
             </div>
-          )}
-
-          {/* Main Stats */}
-          <div style={{
-            display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
-            gap: 2, background: 'var(--e-beige)', marginBottom: '2rem',
-          }}>
-            <EStatCard label="Tổng Người Dùng" value={stats?.totalUsers || 0} icon="" accent />
-            <EStatCard label="Nhà Cung Cấp" value={stats?.totalProviders || 0} icon="" />
-            <EStatCard label="Tổng Bất Động Sản" value={stats?.totalProperties || 0} icon="⊞" />
-            <EStatCard label="Chờ Phê Duyệt" value={stats?.pendingPropertiesCount || 0} icon="◷" warn />
+            <footer className="mt-20 pt-8 border-t border-[var(--e-beige)] text-center pb-8">
+              <p className="text-[0.68rem] uppercase tracking-widest text-[var(--e-muted)] font-medium" style={{ fontFamily: "var(--e-sans)" }}>
+                &copy; {new Date().getFullYear()} Estoria Luxury Real Estate — Admin Control System
+              </p>
+            </footer>
           </div>
-
-          {/* Property + Provider stats */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', marginBottom: '2rem' }}>
-
-            {/* Property Stats */}
-            <div style={{ background: 'var(--e-white)', border: '1px solid var(--e-beige)' }}>
-              <SectionHeader label="Bất Động Sản" title="Thống Kê Tin Đăng" />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, background: 'var(--e-beige)', padding: 2 }}>
-                <EStatCard label="Đã Phê Duyệt" value={stats?.totalPropertyApprovals || 0} icon="✓" />
-                <EStatCard label="Bị Từ Chối" value={stats?.totalPropertyRejections || 0} icon="✗" />
-              </div>
-              <div style={{ padding: '1.2rem 1.8rem' }}>
-                <Link href="/admin/properties/pending" style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  padding: '10px',
-                  background: 'var(--e-charcoal)', color: 'var(--e-white)',
-                  textDecoration: 'none', fontSize: '0.68rem',
-                  fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase',
-                  transition: 'background 0.2s',
-                }}
-                  onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.background = 'var(--e-gold)'}
-                  onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.background = 'var(--e-charcoal)'}
-                >
-                  Duyệt Tin ({stats?.pendingPropertiesCount || 0}) →
-                </Link>
-              </div>
-            </div>
-
-            {/* Provider Stats */}
-            <div style={{ background: 'var(--e-white)', border: '1px solid var(--e-beige)' }}>
-              <SectionHeader label="Provider" title="Thống Kê Xác Minh" />
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2, background: 'var(--e-beige)', padding: 2 }}>
-                <EStatCard label="Đã Xác Minh" value={stats?.totalVerifiedProviders || 0} icon="✓" />
-                <EStatCard label="Chờ Xác Minh" value={stats?.totalPendingProviders || 0} icon="◷" warn />
-                <EStatCard label="Từ Chối" value={stats?.totalRejectedProviders || 0} icon="✗" />
-              </div>
-              <div style={{ padding: '1.2rem 1.8rem' }}>
-                <Link href="/admin/providers/pending" style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  padding: '10px',
-                  background: 'var(--e-charcoal)', color: 'var(--e-white)',
-                  textDecoration: 'none', fontSize: '0.68rem',
-                  fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase',
-                  transition: 'background 0.2s',
-                }}
-                  onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.background = 'var(--e-gold)'}
-                  onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.background = 'var(--e-charcoal)'}
-                >
-                  Xác Minh Provider ({stats?.totalPendingProviders || 0}) →
-                </Link>
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Actions */}
-          <div style={{ background: 'var(--e-white)', border: '1px solid var(--e-beige)' }}>
-            <SectionHeader label="Hành Động" title="Truy Cập Nhanh" />
-            <div style={{
-              display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: 2, background: 'var(--e-beige)', padding: 2,
-            }}>
-              {[
-                { href: '/admin/properties/pending', label: 'Duyệt Bất Động Sản', desc: `${stats?.pendingPropertiesCount || 0} đang chờ`, icon: '✓' },
-                { href: '/admin/providers/pending', label: 'Xác Minh Provider', desc: `${stats?.totalPendingProviders || 0} đang chờ`, icon: '◈' },
-                { href: '/admin/kyc-management', label: 'Quản Lý KYC', desc: 'Duyệt hồ sơ CCCD', icon: '✦' },
-              ].map((action) => (
-                <Link key={action.href} href={action.href} style={{
-                  display: 'flex', flexDirection: 'column',
-                  padding: '1.4rem 1.6rem',
-                  background: 'var(--e-white)',
-                  textDecoration: 'none',
-                  transition: 'background 0.2s',
-                }}
-                  onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.background = 'var(--e-cream)'}
-                  onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.background = 'var(--e-white)'}
-                >
-                  <span style={{ fontSize: '1.2rem', marginBottom: '0.8rem', color: 'var(--e-gold)' }}>{action.icon}</span>
-                  <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--e-charcoal)', marginBottom: 4 }}>
-                    {action.label}
-                  </div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--e-muted)' }}>{action.desc}</div>
-                </Link>
-              ))}
-            </div>
-          </div>
-
         </main>
-      </div>
 
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        <style jsx global>{`
+          .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+          .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+          .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.05); border-radius: 10px; }
+          .custom-scrollbar:hover::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }
+        `}</style>
+      </div>
     </>
   );
 }
