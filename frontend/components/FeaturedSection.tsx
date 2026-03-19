@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { Property, PropertyType } from '@/types/property';
+import { formatVNDShort } from '@/utils/formatPrice';
 
 interface FeaturedSectionProps {
     properties: Property[];
@@ -38,7 +39,7 @@ const FEATURED_FALLBACK: FeaturedItem[] = [
         name: 'Villa Lumière',
         type: 'Biệt Thự',
         location: 'Thủ Đức, TP.HCM',
-        price: '85.000.000 ₫/tháng',
+        price: '85 tr/tháng',
         img: 'https://images.unsplash.com/photo-1613490493576-7fde63acd811?w=900&q=80',
         badge: 'vip',
         main: true,
@@ -47,7 +48,7 @@ const FEATURED_FALLBACK: FeaturedItem[] = [
         name: 'The Riviera Sky',
         type: 'Căn Hộ Cao Cấp',
         location: 'Quận 2, TP.HCM',
-        price: '32.000.000 ₫/tháng',
+        price: '32 tr/tháng',
         img: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=700&q=80',
         badge: 'new',
     },
@@ -55,7 +56,7 @@ const FEATURED_FALLBACK: FeaturedItem[] = [
         name: 'Maison Indochine',
         type: 'Nhà Phố Thiết Kế',
         location: 'Quận 7, TP.HCM',
-        price: '45.000.000 ₫/tháng',
+        price: '45 tr/tháng',
         img: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?w=700&q=80',
         badge: 'hot',
     },
@@ -81,7 +82,7 @@ function toFeaturedItem(p: Property, index: number): FeaturedItem {
         name: p.title,
         type: TYPE_LABEL[p.type] ?? p.type,
         location: shortenAddress(p.address),
-        price: `${p.price.toLocaleString('vi-VN')} ₫/tháng`,
+        price: formatVNDShort(p.price) + (p.type === 'apartment' || p.type === 'office' ? " / tháng" : ""),
         img: getImgSource(p.images?.[0]),
         badge: index === 0 ? 'vip' : index === 1 ? 'new' : 'hot',
         main: index === 0,

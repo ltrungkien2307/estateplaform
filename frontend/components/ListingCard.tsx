@@ -9,18 +9,12 @@ import {
   Ruler,
 } from "lucide-react";
 import type { Property } from "@/types/property";
+import { formatVNDShort } from "@/utils/formatPrice";
 
 interface ListingCardProps {
   property: Property;
 }
 
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
 
 function formatNumber(value?: number) {
   if (value === undefined || value === null) {
@@ -56,7 +50,9 @@ export default function ListingCard({ property }: ListingCardProps) {
 
       <div className="flex h-[calc(100%-9.5rem)] sm:h-[calc(100%-13rem)] flex-col">
         <h3 className="line-clamp-2 text-base sm:text-lg font-semibold text-slate-900">{property.title}</h3>
-        <p className="mt-1 sm:mt-2 text-lg sm:text-xl font-bold text-indigo-800">{formatCurrency(property.price)}</p>
+        <p className="mt-1 sm:mt-2 text-lg sm:text-xl font-bold text-indigo-800">
+          {formatVNDShort(property.price)}{property.type === 'apartment' || property.type === 'office' ? ' / tháng' : ''}
+        </p>
 
         <p className="mt-1 sm:mt-2 inline-flex items-start gap-1.5 sm:gap-2 text-xs sm:text-sm text-slate-600">
           <MapPin size={15} className="mt-0.5 shrink-0" />

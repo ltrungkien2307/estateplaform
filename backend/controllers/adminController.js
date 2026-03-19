@@ -1,5 +1,6 @@
 const Property = require('../models/Property');
 const User = require('../models/User');
+const RoleRequest = require('../models/RoleRequest');
 const Joi = require('joi');
 
 // ─── Validation Schemas ──────────────────────────────────────
@@ -32,6 +33,7 @@ exports.getDashboardStats = async (req, res, next) => {
       approvedProperties,
       rejectedProperties,
       pendingProviders,
+      pendingProvidersRoleRequests,
       verifiedProviders,
       rejectedProviders,
     ] = await Promise.all([
@@ -42,29 +44,25 @@ exports.getDashboardStats = async (req, res, next) => {
       Property.countDocuments({ status: 'approved' }),
       Property.countDocuments({ status: 'rejected' }),
       User.countDocuments({
-        role: 'provider',
-        kycStatus: { $in: ['pending', 'submitted', 'reviewing'] },
+        kycStatus: { $in: ['submitted', 'reviewing'] },
       }),
-      User.countDocuments({ role: 'provider', kycStatus: 'verified' }),
-      User.countDocuments({ role: 'provider', kycStatus: 'rejected' }),
+      RoleRequest.countDocuments({ status: 'pending' }),
+      User.countDocuments({ kycStatus: 'verified' }),
+      User.countDocuments({ kycStatus: 'rejected' }),
     ]);
 
     res.status(200).json({
       status: 'success',
       data: {
-        stats: {
-          users: totalUsers,
-          providers: totalProviders,
-          pendingProviders,
-          verifiedProviders,
-          rejectedProviders,
-          properties: {
-            total: totalProperties,
-            pending: pendingProperties,
-            approved: approvedProperties,
-            rejected: rejectedProperties,
-          },
-        },
+        totalUsers,
+        totalProviders,
+        totalPendingProviders: pendingProviders + pendingProvidersRoleRequests,
+        totalVerifiedProviders: verifiedProviders,
+        totalRejectedProviders: rejectedProviders,
+        totalProperties,
+        pendingPropertiesCount: pendingProperties,
+        totalPropertyApprovals: approvedProperties,
+        totalPropertyRejections: rejectedProperties,
       },
     });
   } catch (err) {
@@ -171,11 +169,11 @@ exports.verifyProvider = async (req, res, next) => {
       });
     }
 
-    const user = await User.findOne({ _id: req.params.id, role: 'provider' });
+    const user = await User.findById(req.params.id);
     if (!user) {
       return res.status(404).json({
         status: 'error',
-        message: 'No provider found with that ID',
+        message: 'No user found with that ID',
       });
     }
 
@@ -203,6 +201,7 @@ exports.verifyProvider = async (req, res, next) => {
 
     if (nextKycStatus === 'verified') {
       nextIsVerified = true;
+      user.role = 'provider'; // Automatically update role when KYC is verified
     } else {
       nextIsVerified = false;
     }
@@ -223,6 +222,17 @@ exports.verifyProvider = async (req, res, next) => {
 
     await user.save({ validateBeforeSave: false });
 
+    // ─── Update Associated RoleRequest if it exists ──────────
+    if (nextKycStatus === 'verified' || nextKycStatus === 'rejected') {
+      await RoleRequest.findOneAndUpdate(
+        { userId: user._id, status: 'pending' },
+        {
+          status: nextKycStatus === 'verified' ? 'approved' : 'rejected',
+          rejectionReason: nextKycStatus === 'rejected' ? rejectionReason : '',
+        }
+      );
+    }
+
     res.status(200).json({
       status: 'success',
       message: `Provider KYC updated to "${user.kycStatus}"`,
@@ -237,10 +247,40 @@ exports.verifyProvider = async (req, res, next) => {
 // GET /api/admin/providers/pending
 exports.getPendingProviders = async (req, res, next) => {
   try {
-    const providers = await User.find({
-      role: 'provider',
-      isVerified: false,
+    // 1. Get users who are already providers but unverified, or have submitted KYC
+    const unverifiedProviders = await User.find({
+      $or: [{ role: 'provider', isVerified: false }, { kycStatus: 'submitted' }],
     }).sort('-createdAt');
+
+    // 2. Get users who have a pending role change request to provider
+    const roleRequests = await RoleRequest.find({ status: 'pending' })
+      .populate('userId', 'name email phone avatar address kycStatus isVerified createdAt')
+      .sort('-createdAt');
+
+    // Combine them into a single list
+    // Use a Map to avoid duplicates (though rare, the same user could match both)
+    const combinedMap = new Map();
+
+    unverifiedProviders.forEach(u => {
+      combinedMap.set(u._id.toString(), {
+        ...u.toObject(),
+        isRoleRequest: false
+      });
+    });
+
+    roleRequests.forEach(req => {
+      if (req.userId) {
+        combinedMap.set(req.userId._id.toString(), {
+          ...req.userId.toObject(),
+          isRoleRequest: true,
+          roleRequestId: req._id
+        });
+      }
+    });
+
+    const providers = Array.from(combinedMap.values()).sort((a, b) => {
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
 
     res.status(200).json({
       status: 'success',

@@ -21,6 +21,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import KycStatusBadge from "@/components/KycStatusBadge";
 import type { Property } from "@/types/property";
 import type { KycStatus, User } from "@/types/user";
+import { formatVNDShort } from "@/utils/formatPrice";
 
 /* ═══════════════════════════════════════════════════════════
    TYPES
@@ -55,8 +56,7 @@ function prettyJson(value: unknown) {
   if (!value) return "Không có dữ liệu";
   try { return JSON.stringify(value, null, 2); } catch { return "Không thể hiển thị dữ liệu"; }
 }
-const fmtVND = (n: number) =>
-  new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(Math.round(n));
+const fmtVND = (n: number) => formatVNDShort(n);
 function isImageUrl(url: string) {
   return /\/image\/upload\//.test(url) || /\.(png|jpe?g|webp|gif|bmp|svg)(\?|$)/i.test(url);
 }

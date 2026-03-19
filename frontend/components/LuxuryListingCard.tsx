@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import type { Property } from '@/types/property';
+import { formatVNDShort } from '@/utils/formatPrice';
 
 interface LuxuryListingCardProps {
     property: Property;
@@ -60,7 +61,7 @@ export default function LuxuryListingCard({ property: p }: LuxuryListingCardProp
     const img = getImgSource(p.images?.[0], p);
 
     const priceFormatted = p.price
-        ? p.price.toLocaleString('vi-VN') + ' ₫'
+        ? formatVNDShort(p.price) + (p.type === 'apartment' || p.type === 'office' ? ' / tháng' : '')
         : '—';
 
     const handleCardClick = () => {
@@ -138,7 +139,6 @@ export default function LuxuryListingCard({ property: p }: LuxuryListingCardProp
                 <div className="e-listing-footer">
                     <div className="e-listing-price">
                         {priceFormatted}
-                        <small>/ tháng</small>
                     </div>
                     <Link
                         href={`/properties/${p._id}`}

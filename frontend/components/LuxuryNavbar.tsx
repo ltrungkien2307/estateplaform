@@ -69,8 +69,7 @@ export default function LuxuryNavbar({ onPostClick, variant = 'default' }: Luxur
     const adminMenuItems = [
         { href: '/admin/dashboard', label: 'Dashboard', icon: '▦' },
         { href: '/profile/settings', label: 'Hồ Sơ', icon: '◎' },
-        { href: '/admin/kyc-management', label: 'Xác Minh KYC', icon: '✦' },
-        { href: '/subscription/plans', label: 'Gói Dịch Vụ', icon: '◈' },
+
     ];
 
     const providerMenuItems = [

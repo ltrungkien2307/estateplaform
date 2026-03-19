@@ -7,6 +7,22 @@ import Image from "next/image";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/router";
 import {
+  Waves, Dumbbell, Wind, Car, Trees, ShieldCheck, Wifi,
+  AirVent, ChefHat, WashingMachine,
+} from "lucide-react";
+const AMENITY_ICONS: Record<string, React.ReactNode> = {
+  "Hồ bơi": <Waves size={16} />,
+  "Phòng gym": <Dumbbell size={16} />,
+  "Ban công": <Wind size={16} />,
+  "Bãi đỗ xe": <Car size={16} />,
+  "Sân vườn": <Trees size={16} />,
+  "Bảo vệ 24/7": <ShieldCheck size={16} />,
+  "WiFi": <Wifi size={16} />,
+  "Điều hoà": <AirVent size={16} />,
+  "Bếp đầy đủ": <ChefHat size={16} />,
+  "Máy giặt": <WashingMachine size={16} />,
+};
+import {
   Bath,
   BedDouble,
   Building2,
@@ -18,6 +34,11 @@ import {
   Phone,
   Ruler,
   Send,
+  Maximize2,
+  Sparkles,
+  ArrowRight,
+  Share2,
+  Heart,
 } from "lucide-react";
 import LuxuryNavbar from "@/components/LuxuryNavbar";
 import LuxuryFooter from "@/components/LuxuryFooter";
@@ -53,128 +74,185 @@ function isImageUrl(url: string) {
 function isPopulatedOwner(owner: PropertyOwner): owner is Exclude<PropertyOwner, string> {
   return typeof owner !== "string";
 }
-function getErrorMessage(error: unknown) {
-  if (error instanceof ApiError) {
-    if (error.statusCode === 404) return "Bất động sản không tồn tại hoặc đang bị ẩn.";
-    return error.message;
-  }
-  if (error instanceof Error) return error.message;
-  return "Hiện chưa thể tải chi tiết bất động sản.";
-}
 
-// ─── Design tokens ─────────────────────────────────────────────────────────────
-const C = {
-  white: "#ffffff",
-  offWhite: "#f9f9f8",
-  surface: "#f4f3f0",
-  border: "#e8e6e1",
-  borderLight: "#f0eeea",
-  gold: "#9a7c45",
-  charcoal: "#1a1814",
-  dark: "#2d2a24",
-  muted: "#7a7568",
-  light: "#b0aa9e",
-};
-
-// ─── CSS ────────────────────────────────────────────────────────────────────────
-const GLOBAL_CSS = `
-  @keyframes _fadeUp {
-    from { opacity: 0; transform: translateY(22px); }
-    to   { opacity: 1; transform: translateY(0);    }
+// ————— CSS Constants & Global Styles —————
+const GLOBAL_STYLE = `
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
   }
-  @keyframes _fadeIn {
+  @keyframes fadeIn {
     from { opacity: 0; }
-    to   { opacity: 1; }
+    to { opacity: 1; }
   }
-  @keyframes _scaleIn {
-    from { opacity: 0; transform: scale(0.97); }
-    to   { opacity: 1; transform: scale(1);    }
-  }
-  @keyframes _lineGrow {
+  @keyframes lineGrow {
     from { width: 0; }
-    to   { width: 2.5rem; }
+    to { width: 100%; }
   }
 
-  ._hero-chip   { animation: _fadeIn   0.5s ease both; }
-  ._hero-title  { animation: _fadeUp   0.65s ease both 0.1s; }
-  ._hero-price  { animation: _fadeUp   0.65s ease both 0.22s; }
-  ._hero-addr   { animation: _fadeUp   0.65s ease both 0.32s; }
-  ._stat-cell   { animation: _fadeUp 0.45s ease both; }
+  .e-reveal { opacity: 0; transform: translateY(20px); transition: all 0.8s cubic-bezier(0.22, 1, 0.36, 1); }
+  .e-reveal.visible { opacity: 1; transform: translateY(0); }
 
-  ._reveal {
-    opacity: 0;
-    transform: translateY(28px);
-    transition: opacity 0.55s ease, transform 0.55s ease;
-  }
-  ._reveal.visible { opacity: 1; transform: translateY(0); }
-
-  ._thumb:hover { opacity: 1 !important; transform: scale(1.04); }
-  ._thumb { transition: transform 0.2s ease, opacity 0.2s ease, border-color 0.2s ease !important; }
-
-  ._btn-gold:hover        { background: #b8955a !important; }
-  ._btn-outline:hover     { background: ${C.offWhite} !important; border-color: ${C.dark} !important; }
-  ._btn-dark-outline:hover { background: rgba(255,255,255,0.07) !important; border-color: rgba(255,255,255,0.35) !important; }
-
-  ._doc-card:hover { border-color: ${C.gold} !important; transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.07); }
-  ._doc-card       { transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease; }
-  ._pill:hover     { background: ${C.surface} !important; border-color: ${C.gold} !important; }
-  ._pill           { transition: background 0.18s ease, border-color 0.18s ease; }
-  ._meta-cell:hover { background: #fdfcfb !important; }
-  ._meta-cell       { transition: background 0.18s ease; }
-
-  ._hero-img { transition: opacity 0.4s ease; }
-
-  ._section-heading::after {
-    content: '';
-    display: block;
-    height: 1.5px;
-    background: ${C.gold};
-    margin-top: 6px;
-    animation: _lineGrow 0.5s ease both 0.1s;
-    opacity: 0.5;
+  .e-hero-overlay {
+    background: linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, transparent 30%, rgba(0,0,0,0.85) 100%);
   }
 
-  ._sidebar     { animation: _fadeUp 0.6s ease both 0.3s; }
+  .e-sticky-sidebar {
+    position: sticky;
+    top: 100px;
+  }
 
-  ._form-input:focus { border-color: ${C.gold} !important; outline: none; box-shadow: 0 0 0 2px rgba(154,124,69,0.12); }
-  ._form-input       { transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+  .e-thumbnail {
+    transition: all 0.3s var(--e-ease);
+    border: 1px solid transparent;
+  }
+  .e-thumbnail.active {
+    border-color: var(--e-gold);
+    transform: scale(1.05);
+  }
 
-  ._success  { animation: _fadeUp 0.35s ease both; }
-  ._back-link:hover { color: rgba(255,255,255,0.9) !important; }
-  ._back-link       { transition: color 0.2s ease; }
+  .e-glass-card {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(140, 110, 63, 0.15);
+  }
+
+  .e-detail-section {
+    padding: 3rem 0;
+    border-bottom: 1px solid var(--e-beige);
+  }
+
+  .e-category-tag {
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--e-gold);
+    font-weight: 700;
+  }
+
+  .e-h2 {
+    font-family: var(--e-serif);
+    font-size: 1.8rem;
+    font-weight: 500;
+    color: var(--e-charcoal);
+    margin-bottom: 1.5rem;
+  }
+
+  .e-prose {
+    font-size: 1rem;
+    line-height: 1.8;
+    color: var(--e-muted);
+    font-weight: 300;
+  }
+
+  .e-icon-box {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--e-beige);
+    color: var(--e-gold);
+    transition: all 0.3s;
+  }
+  .e-icon-box:hover {
+    background: var(--e-gold);
+    color: var(--e-white);
+    border-color: var(--e-gold);
+  }
+
+  .e-contact-input {
+    width: 100%;
+    padding: 12px 16px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    border: 1px solid var(--e-beige);
+    background: var(--e-white);
+    outline: none;
+    transition: all 0.25s;
+    border-radius: 4px;
+  }
+  .e-contact-input:focus {
+    border-color: var(--e-gold);
+    background: var(--e-cream);
+  }
+
+  .e-btn-fill {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 14px 28px;
+    background: var(--e-charcoal);
+    color: var(--e-white);
+    border: 1px solid var(--e-charcoal);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-decoration: none;
+    width: 100%;
+  }
+  .e-btn-fill:hover {
+    background: var(--e-gold);
+    border-color: var(--e-gold);
+  }
+
+  .e-btn-outline {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 14px 28px;
+    background: transparent;
+    color: var(--e-charcoal);
+    border: 1px solid var(--e-beige);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-decoration: none;
+    width: 100%;
+  }
+  .e-btn-outline:hover {
+    border-color: var(--e-charcoal);
+    background: var(--e-cream);
+  }
 `;
 
-// ─── Scroll-reveal ─────────────────────────────────────────────────────────────
-function useReveal() {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) { el.classList.add("visible"); observer.disconnect(); } },
-      { threshold: 0.1 }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-  return ref;
-}
-
-function Reveal({ children, delay = 0, style }: { children: React.ReactNode; delay?: number; style?: React.CSSProperties }) {
-  const ref = useReveal();
-  return (
-    <div ref={ref} className="_reveal" style={{ ...style, transitionDelay: `${delay}ms` }}>
-      {children}
-    </div>
-  );
-}
-
-// ─── Page ──────────────────────────────────────────────────────────────────────
 export default function PropertyDetailPage({ property, errorMessage, recommendations }: PropertyDetailPageProps) {
   const router = useRouter();
   const [activeImageIndex, setActiveImageIndex] = useState(0);
-  const [imgVisible, setImgVisible] = useState(true);
+  const [scrolled, setScrolled] = useState(false);
   const [contactSent, setContactSent] = useState(false);
+  const reveals = useRef<(HTMLDivElement | null)[]>([]);
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 80);
+    window.addEventListener("scroll", handleScroll);
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("visible");
+          }
+        });
+      },
+      { threshold: 0.1 }
+    );
+
+    reveals.current.forEach((el) => el && observer.observe(el));
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      observer.disconnect();
+    };
+  }, []);
 
   const handlePostClick = () => {
     const token = typeof window !== "undefined" ? window.localStorage.getItem("estate_manager_token") : null;
@@ -182,367 +260,306 @@ export default function PropertyDetailPage({ property, errorMessage, recommendat
     else router.push("/provider/properties/create");
   };
 
-  const switchImage = (idx: number) => {
-    if (idx === activeImageIndex) return;
-    setImgVisible(false);
-    setTimeout(() => { setActiveImageIndex(idx); setImgVisible(true); }, 220);
-  };
-
-  // ── Error ────────────────────────────────────────────────────────────────────
   if (!property) {
     return (
-      <>
-        <Head><title>Chi tiết bất động sản — Estoria</title></Head>
-        <style>{GLOBAL_CSS}</style>
-        <div className="estoria" style={{ background: C.white, minHeight: "100vh" }}>
-          <LuxuryNavbar variant="light" onPostClick={handlePostClick} />
-          <main style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh", padding: "3rem" }}>
-            <div style={{ textAlign: "center", maxWidth: 440 }}>
-              <div style={{ fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.22em", textTransform: "uppercase", color: C.gold, marginBottom: "0.5rem" }}>Không khả dụng</div>
-              <h1 style={{ fontFamily: "var(--e-serif)", fontSize: "1.9rem", fontWeight: 500, color: C.charcoal, margin: "0 0 1rem" }}>Bất động sản không tồn tại</h1>
-              <p style={{ fontSize: "0.92rem", color: C.muted, lineHeight: 1.8, marginBottom: "1.5rem" }}>{errorMessage || "Bất động sản bạn tìm không tồn tại."}</p>
-              <Link href="/" className="_btn-gold" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "12px 22px", background: C.gold, color: "#fff", textDecoration: "none", fontSize: "0.72rem", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase" }}>
-                <ChevronLeft size={14} />Quay lại danh sách
-              </Link>
-            </div>
-          </main>
-          <LuxuryFooter />
-        </div>
-      </>
+      <div className="estoria min-h-screen bg-white">
+        <style>{GLOBAL_STYLE}</style>
+        <LuxuryNavbar variant="light" onPostClick={handlePostClick} />
+        <main style={{ padding: "8rem 5vw", textAlign: "center" }}>
+          <h1 style={{ fontFamily: "var(--e-serif)", fontSize: "2rem", marginBottom: "1.5rem" }}>
+            {errorMessage || "Không tìm thấy bất động sản"}
+          </h1>
+          <Link href="/" className="e-btn-fill" style={{ width: "auto", display: "inline-flex" }}>
+            Quay lại trang chủ
+          </Link>
+        </main>
+        <LuxuryFooter />
+      </div>
     );
   }
 
-  // ── Derived data ─────────────────────────────────────────────────────────────
   const images = property.images?.length ? property.images : [];
-  const activeImage = images[activeImageIndex];
   const owner = isPopulatedOwner(property.ownerId) ? property.ownerId : null;
-  const ownerPhone = owner?.phone?.trim() || "";
-  const ownerEmail = owner?.email?.trim() || "";
-  const phoneHref = ownerPhone ? `tel:${ownerPhone.replace(/[^\d+]/g, "")}` : "";
-  const providerContactHref = ownerEmail ? `mailto:${ownerEmail}?subject=${encodeURIComponent(`Inquiry about ${property.title}`)}` : "#contact-provider";
   const pricePerSqm = property.area && property.area > 0 ? Math.round(property.price / property.area) : null;
   const coords = property.location?.coordinates ?? [];
-  const mapLat = coords[1];
-  const mapLng = coords[0];
-  const hasMapCoords = Number.isFinite(mapLat) && Number.isFinite(mapLng) && !(mapLat === 0 && mapLng === 0);
-  const statusLabelMap: Record<string, string> = { approved: "Đã duyệt", pending: "Chờ duyệt", rejected: "Bị từ chối", available: "Đang bán", rented: "Đã cho thuê", sold: "Đã bán" };
-  const statusLabel = statusLabelMap[property.status] ?? "—";
+  const hasMapCoords = Number.isFinite(coords[1]) && Number.isFinite(coords[0]) && !(coords[1] === 0 && coords[0] === 0);
 
-  const handleContactSubmit = (e: FormEvent<HTMLFormElement>) => { e.preventDefault(); setContactSent(true); };
-
-  // ── Shared styles ────────────────────────────────────────────────────────────
-  // +2–3px across the board
-  const eyebrow: React.CSSProperties = {
-    fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.22em",
-    textTransform: "uppercase", color: C.gold, marginBottom: "0.4rem",
+  const handleContactSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setContactSent(true);
   };
-  const prose: React.CSSProperties = {
-    fontSize: "0.92rem", color: C.muted, lineHeight: 1.9,
-    fontWeight: 300, whiteSpace: "pre-line", margin: 0,
-  };
-  const btnGold: React.CSSProperties = {
-    display: "flex", alignItems: "center", justifyContent: "center",
-    gap: 8, padding: "12px 18px", background: C.gold, color: "#fff",
-    border: "none", cursor: "pointer", fontSize: "0.72rem", fontWeight: 700,
-    letterSpacing: "0.14em", textTransform: "uppercase", textDecoration: "none", width: "100%",
-  };
-  const btnOutline: React.CSSProperties = {
-    display: "flex", alignItems: "center", justifyContent: "center",
-    gap: 8, padding: "11px 18px", background: "transparent", color: C.dark,
-    border: `1px solid ${C.border}`, cursor: "pointer", fontSize: "0.72rem",
-    fontWeight: 600, letterSpacing: "0.14em", textTransform: "uppercase",
-    textDecoration: "none", width: "100%",
-  };
-  const sectionDivider: React.CSSProperties = { padding: "2.2rem 0", borderBottom: `1px solid ${C.borderLight}` };
 
   return (
     <>
-      <Head><title>{property.title} — Estoria</title></Head>
-      <style>{GLOBAL_CSS}</style>
+      <Head>
+        <title>{property.title} — Estoria Luxury Portal</title>
+      </Head>
+      <style>{GLOBAL_STYLE}</style>
 
-      <div className="estoria" style={{ background: C.white, minHeight: "100vh" }}>
-        <LuxuryNavbar variant="light" onPostClick={handlePostClick} />
+      <div className="estoria min-h-screen bg-white">
+        {/* Navbar — Dynamic transparency */}
+        <LuxuryNavbar onPostClick={handlePostClick} />
 
-        {/* ══ HERO ══════════════════════════════════════════════════════════ */}
-        <section style={{ position: "relative", width: "100%", height: "min(88vh, 740px)", overflow: "hidden", background: C.charcoal }}>
-          {activeImage ? (
-            <Image
-              src={activeImage} alt={property.title}
-              fill unoptimized priority
-              className="_hero-img"
-              style={{ objectFit: "cover", opacity: imgVisible ? 1 : 0 }}
-            />
-          ) : (
-            <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.15)" }}>
-              <Building2 size={64} />
-            </div>
-          )}
+        {/* 01 — CINEMATIC HERO */}
+        <section style={{ position: "relative", height: "100vh", minHeight: "600px" }}>
+          <div style={{ position: "absolute", inset: 0 }}>
+            {images.length > 0 ? (
+              <Image
+                src={images[activeImageIndex]}
+                alt={property.title}
+                fill
+                priority
+                unoptimized
+                style={{ objectFit: "cover" }}
+              />
+            ) : (
+              <div style={{ width: "100%", height: "100%", background: "var(--e-charcoal)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Building2 size={80} color="var(--e-gold)" opacity={0.2} />
+              </div>
+            )}
+          </div>
 
-          {/* Gradient overlay */}
-          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(20,18,14,0.94) 0%, rgba(20,18,14,0.38) 55%, rgba(20,18,14,0.12) 100%)", zIndex: 1 }} />
+          <div className="e-hero-overlay" style={{ position: "absolute", inset: 0, zIndex: 1 }} />
 
-          {/* Back */}
-          <Link href="/" className="_back-link _hero-chip"
-            style={{ position: "absolute", top: "5rem", left: "2.5rem", zIndex: 10, display: "flex", alignItems: "center", gap: 6, fontSize: "0.74rem", fontWeight: 600, letterSpacing: "0.16em", textTransform: "uppercase", color: "rgba(255,255,255,0.55)", textDecoration: "none" }}>
-            <ChevronLeft size={14} />Danh sách
-          </Link>
-
-          {/* Hero content */}
-          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 2, padding: "0 2.5rem 3rem" }}>
-            {/* Chips */}
-            <div className="_hero-chip" style={{ marginBottom: "0.7rem", display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {[property.type, statusLabel].map((t, i) => (
-                <span key={i} style={{ display: "inline-block", padding: "4px 12px", border: "1px solid rgba(255,255,255,0.2)", fontSize: "0.64rem", fontWeight: 700, letterSpacing: "0.2em", textTransform: "uppercase", color: "rgba(255,255,255,0.7)", background: "rgba(255,255,255,0.06)", backdropFilter: "blur(4px)" }}>
-                  {t}
+          <div style={{ position: "relative", zIndex: 2, height: "100%", display: "flex", alignItems: "flex-end", padding: "0 5vw 130px" }}>
+            <div style={{ maxWidth: "800px" }}>
+              <div style={{ display: "flex", gap: "10px", marginBottom: "1.5rem" }}>
+                <span style={{ padding: "6px 14px", border: "1px solid var(--e-white)", borderRadius: "30px", fontSize: "0.62rem", color: "white", textTransform: "uppercase", letterSpacing: "0.15em", background: "rgba(255,255,255,0.15)", backdropFilter: "blur(8px)" }}>
+                  {property.type}
                 </span>
+                <span style={{ padding: "6px 14px", border: "1px solid var(--e-gold)", borderRadius: "30px", fontSize: "0.62rem", color: "var(--e-gold-light)", textTransform: "uppercase", letterSpacing: "0.15em", background: "rgba(140, 110, 63, 0.15)", backdropFilter: "blur(8px)" }}>
+                  Luxury Collection
+                </span>
+              </div>
+
+              <h1 style={{ fontFamily: "var(--e-serif)", fontSize: "clamp(2.5rem, 5vw, 4rem)", color: "white", lineHeight: 1, marginBottom: "1.5rem" }}>
+                {property.title}
+              </h1>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "2.5rem", flexWrap: "wrap", color: "rgba(255,255,255,0.8)" }}>
+                <div style={{ fontSize: "1.5rem", fontWeight: 500, color: "var(--e-gold-light)" }}>
+                  {formatCurrency(property.price)}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.9rem" }}>
+                  <MapPin size={18} /> {property.address}
+                </div>
+              </div>
+            </div>
+
+
+          </div>
+
+          {/* BOTTOM OVERLAY (Specs & Thumbnails) */}
+          <div style={{
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            zIndex: 10,
+            background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 50%, transparent 100%)",
+            backdropFilter: "blur(12px)",
+            padding: "2rem 5vw",
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "space-between",
+            gap: "2rem",
+            borderTop: "1px solid rgba(255,255,255,0.1)"
+          }}>
+            {/* Specs */}
+            <div style={{ display: "flex", gap: "3.5rem", flexWrap: "wrap", paddingBottom: "5px" }}>
+              {[
+                { icon: <BedDouble size={22} />, label: "Phòng ngủ", value: property.bedrooms },
+                { icon: <Bath size={22} />, label: "Phòng tắm", value: property.bathrooms },
+                { icon: <Maximize2 size={22} />, label: "Diện tích", value: `${property.area} m²` },
+                { icon: <CalendarClock size={22} />, label: "Xây dựng", value: property.yearBuilt || "2024" }
+              ].map((spec, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: "15px", color: "white" }}>
+                  <div style={{ color: "var(--e-gold-light)" }}>{spec.icon}</div>
+                  <div>
+                    <div style={{ fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "0.15em", opacity: 0.6 }}>{spec.label}</div>
+                    <div style={{ fontSize: "1.05rem", fontWeight: 500 }}>{spec.value}</div>
+                  </div>
+                </div>
               ))}
             </div>
 
-            {/* Title */}
-            <h1 className="_hero-title" style={{ fontFamily: "var(--e-serif)", fontSize: "clamp(2rem,3.8vw,3.2rem)", fontWeight: 500, color: "#fff", lineHeight: 1.12, margin: "0 0 0.6rem", maxWidth: 760 }}>
-              {property.title}
-            </h1>
-
-            {/* Price + address row */}
-            <div style={{ display: "flex", alignItems: "baseline", gap: "2rem", flexWrap: "wrap" }}>
-              <div className="_hero-price" style={{ fontFamily: "var(--e-serif)", fontSize: "clamp(1.2rem,2vw,1.65rem)", color: "#c9a96e" }}>
-                {formatCurrency(property.price)}
+            {/* Gallery Thumbnails Overlay */}
+            {images.length > 1 && (
+              <div style={{ display: "flex", gap: "8px", overflowX: "auto", maxWidth: "400px", paddingBottom: "5px" }}>
+                {images.map((img, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setActiveImageIndex(i)}
+                    className={`e-thumbnail ${activeImageIndex === i ? 'active' : ''}`}
+                    style={{
+                      position: "relative",
+                      width: "70px",
+                      height: "45px",
+                      flexShrink: 0,
+                      padding: 0,
+                      border: "1px solid transparent",
+                      borderRadius: "4px",
+                      cursor: "pointer",
+                      overflow: "hidden",
+                      borderColor: activeImageIndex === i ? "var(--e-gold)" : "rgba(255,255,255,0.2)"
+                    }}
+                  >
+                    <img src={img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    {activeImageIndex !== i && <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)" }} />}
+                  </button>
+                ))}
               </div>
-              <div className="_hero-addr" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.82rem", color: "rgba(255,255,255,0.48)" }}>
-                <MapPin size={14} />{property.address}
-              </div>
-            </div>
+            )}
           </div>
         </section>
 
-        {/* ══ THUMBNAIL STRIP ══════════════════════════════════════════════ */}
-        {images.length > 1 && (
-          <div style={{ display: "flex", gap: 3, padding: "0.7rem 2.5rem", background: C.charcoal, overflowX: "auto", scrollbarWidth: "none", borderBottom: `3px solid ${C.gold}` }}>
-            {images.map((url, idx) => (
-              <button
-                key={`${url}-${idx}`} type="button"
-                onClick={() => switchImage(idx)}
-                className="_thumb"
-                style={{ flexShrink: 0, width: 88, height: 58, overflow: "hidden", border: `2px solid ${idx === activeImageIndex ? C.gold : "transparent"}`, cursor: "pointer", padding: 0, background: "none", opacity: idx === activeImageIndex ? 1 : 0.5 }}
-              >
-                <img src={url} alt={`${property.title} ${idx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} loading="lazy" />
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* ══ STATS BAR ════════════════════════════════════════════════════ */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", background: C.offWhite, borderBottom: `1px solid ${C.border}` }}>
-          {[
-            { label: "Phòng ngủ", value: formatNumber(property.bedrooms), icon: <BedDouble size={15} color={C.gold} /> },
-            { label: "Phòng tắm", value: formatNumber(property.bathrooms), icon: <Bath size={15} color={C.gold} /> },
-            { label: "Diện tích", value: `${formatNumber(property.area)} m²`, icon: <Ruler size={15} color={C.gold} /> },
-            { label: "Năm xây dựng", value: String(property.yearBuilt || "N/A"), icon: <CalendarClock size={15} color={C.gold} /> },
-            { label: "Nội thất", value: property.furnished ? "Có nội thất" : "Không nội thất", icon: null },
-          ].map((stat, i) => (
-            <div key={i} className="_stat-cell"
-              style={{ padding: "1.3rem 1.8rem", borderRight: i < 4 ? `1px solid ${C.border}` : "none", display: "flex", flexDirection: "column", gap: 6, animationDelay: `${i * 80}ms` }}>
-              <div style={{ fontSize: "0.6rem", fontWeight: 700, letterSpacing: "0.2em", textTransform: "uppercase", color: C.light }}>{stat.label}</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--e-serif)", fontSize: "1.02rem", color: C.charcoal }}>
-                {stat.icon}{stat.value}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* ══ BODY ══════════════════════════════════════════════════════════ */}
-        {/* Layout: wider article, narrower sticky sidebar */}
-        <div style={{ maxWidth: 1240, margin: "0 auto", padding: "3.5rem 2.5rem", display: "grid", gridTemplateColumns: "1fr 340px", gap: "3.5rem", alignItems: "start" }}>
-
-          {/* ── Article ──────────────────────────────────────────────────── */}
-          <article style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-
-            {/* Description */}
-            <Reveal style={sectionDivider}>
-              <div style={eyebrow}>Về bất động sản này</div>
-              <h2 className="_section-heading" style={{ fontFamily: "var(--e-serif)", fontSize: "1.38rem", fontWeight: 500, color: C.charcoal, margin: "0 0 1.1rem", lineHeight: 1.3 }}>
-                Mô tả chi tiết
-              </h2>
-              <p style={prose}>{property.description || "Hiện chưa có mô tả cho bất động sản này."}</p>
-            </Reveal>
-
-            {/* Meta grid */}
-            <Reveal delay={60} style={sectionDivider}>
-              <div style={eyebrow}>Thông tin</div>
-              <h2 className="_section-heading" style={{ fontFamily: "var(--e-serif)", fontSize: "1.38rem", fontWeight: 500, color: C.charcoal, margin: "0 0 1.1rem", lineHeight: 1.3 }}>
-                Dữ liệu bất động sản
-              </h2>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 1, background: C.borderLight }}>
-                {[
-                  { label: "Giá / m²", value: pricePerSqm ? `${pricePerSqm.toLocaleString("vi-VN")} ₫` : "N/A" },
-                  { label: "Ngày đăng", value: formatDate(property.createdAt) },
-                  { label: "Cập nhật", value: formatDate(property.updatedAt) },
-                  { label: "Mã tin", value: property._id },
-                ].map((m, i) => (
-                  <div key={i} className="_meta-cell" style={{ background: C.white, padding: "1.1rem 1.4rem" }}>
-                    <div style={{ fontSize: "0.6rem", fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: C.light, marginBottom: 6 }}>{m.label}</div>
-                    <div style={{ fontFamily: "var(--e-serif)", fontSize: "1rem", color: C.charcoal }}>{m.value}</div>
-                  </div>
-                ))}
-              </div>
-            </Reveal>
-
-            {/* Amenities */}
-            <Reveal delay={80} style={sectionDivider}>
-              <div style={eyebrow}>Tiện ích</div>
-              <h2 className="_section-heading" style={{ fontFamily: "var(--e-serif)", fontSize: "1.38rem", fontWeight: 500, color: C.charcoal, margin: "0 0 1.1rem", lineHeight: 1.3 }}>
-                Tiện nghi & đặc điểm
-              </h2>
-              {property.amenities?.length ? (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                  {property.amenities.map((a, i) => (
-                    <span key={a} className="_pill"
-                      style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", background: C.offWhite, border: `1px solid ${C.border}`, fontSize: "0.78rem", color: C.dark, fontWeight: 500, animationDelay: `${i * 40}ms` }}>
-                      <CheckCircle2 size={12} color={C.gold} />{a}
-                    </span>
-                  ))}
+        {/* 03 — MAIN CONTENT GRID */}
+        <main style={{ padding: "5rem 5vw" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: "6rem", alignItems: "start" }}>
+            {/* Left Column — Detailed Info */}
+            <div>
+              <div ref={(el) => { reveals.current[0] = el; }} className="e-reveal e-detail-section" style={{ paddingTop: 0 }}>
+                <div className="e-category-tag" style={{ marginBottom: "1rem" }}>Premium Listing</div>
+                <h2 className="e-h2">Giới Thiệu Tổng Quan</h2>
+                <div className="e-prose">
+                  {property.description || "Bất động sản cao cấp này hiện đại, sang trọng và đầy đủ tiện nghi, tọa lạc tại một trong những vị trí đắc địa nhất. Với không gian rộng rãi, thiết kế tinh tế và tầm nhìn tuyệt đẹp, đây chắc chắn là sự lựa chọn hoàn hảo cho phong cách sống thượng lưu."}
                 </div>
-              ) : <p style={prose}>Chưa có tiện ích được cập nhật.</p>}
-            </Reveal>
+              </div>
 
-            {/* Map */}
-            <Reveal delay={60} style={sectionDivider}>
-              <div style={eyebrow}>Vị trí</div>
-              <h2 className="_section-heading" style={{ fontFamily: "var(--e-serif)", fontSize: "1.38rem", fontWeight: 500, color: C.charcoal, margin: "0 0 1.1rem", lineHeight: 1.3 }}>
-                Bản đồ
-              </h2>
-              <p style={{ ...prose, marginBottom: "1rem" }}>{property.address}</p>
-              {hasMapCoords ? (
-                <div style={{ height: 300, overflow: "hidden", border: `1px solid ${C.border}` }}>
-                  <AddressMap lat={mapLat} lng={mapLng} interactive={false} />
-                </div>
-              ) : <p style={prose}>Chưa có tọa độ để hiển thị bản đồ.</p>}
-            </Reveal>
-
-            {/* Docs */}
-            {property.ownershipDocuments?.length ? (
-              <Reveal delay={60} style={sectionDivider}>
-                <div style={eyebrow}>Pháp lý</div>
-                <h2 className="_section-heading" style={{ fontFamily: "var(--e-serif)", fontSize: "1.38rem", fontWeight: 500, color: C.charcoal, margin: "0 0 1.1rem", lineHeight: 1.3 }}>
-                  Giấy tờ pháp lý
-                </h2>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
-                  {property.ownershipDocuments.map((docUrl, idx) => (
-                    <a key={`${docUrl}-${idx}`} href={docUrl} target="_blank" rel="noreferrer" className="_doc-card"
-                      style={{ display: "block", textDecoration: "none", border: `1px solid ${C.border}`, background: C.white, overflow: "hidden" }}>
-                      {isImageUrl(docUrl) ? (
-                        <div style={{ position: "relative", height: 120, background: C.surface, overflow: "hidden" }}>
-                          <Image src={docUrl} alt={`Giấy tờ ${idx + 1}`} fill style={{ objectFit: "cover" }} />
-                        </div>
-                      ) : (
-                        <div style={{ height: 120, display: "flex", alignItems: "center", justifyContent: "center", background: C.surface, fontSize: "0.78rem", color: C.muted }}>PDF</div>
-                      )}
-                      <div style={{ padding: "0.7rem 0.9rem" }}>
-                        <div style={{ fontSize: "0.78rem", fontWeight: 600, color: C.charcoal, marginBottom: 3 }}>Giấy tờ {idx + 1}</div>
-                        <div style={{ fontSize: "0.7rem", color: C.muted }}>Nhấn để xem</div>
+              <div ref={(el) => { reveals.current[1] = el; }} className="e-reveal e-detail-section">
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "1rem" }}>
+                  {(property.amenities?.length
+                    ? property.amenities
+                    : ["Hồ bơi", "Bảo vệ 24/7", "Sân vườn", "Điều hoà", "Bãi đỗ xe", "Phòng gym"]
+                  ).map((item, i) => (
+                    <div key={i} style={{
+                      display: "flex", alignItems: "center", gap: "12px",
+                      padding: "12px 16px",
+                      background: "var(--e-cream)",
+                      border: "1px solid var(--e-beige)",
+                    }}>
+                      <div style={{
+                        width: 34, height: 34,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        border: "1px solid var(--e-beige)",
+                        color: "var(--e-gold)",
+                        flexShrink: 0,
+                      }}>
+                        {AMENITY_ICONS[item] ?? <Sparkles size={16} />}
                       </div>
-                    </a>
+                      <span style={{ fontSize: "0.88rem", color: "var(--e-charcoal)", fontWeight: 500 }}>{item}</span>
+                    </div>
                   ))}
                 </div>
-              </Reveal>
-            ) : null}
-          </article>
-
-          {/* ── Sidebar ──────────────────────────────────────────────────── */}
-          <aside id="contact-provider" className="_sidebar"
-            style={{ position: "sticky", top: 100, display: "flex", flexDirection: "column", gap: "1.2rem" }}>
-
-            {/* Price block */}
-            <div style={{ padding: "1.8rem", background: C.charcoal }}>
-              <div style={{ ...eyebrow, color: "#c9a96e", marginBottom: "0.7rem" }}>Mức giá</div>
-              <div style={{ fontFamily: "var(--e-serif)", fontSize: "1.85rem", color: "#fff", marginBottom: 5, lineHeight: 1.1 }}>
-                {formatCurrency(property.price)}
               </div>
-              {pricePerSqm && (
-                <div style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.35)", marginBottom: "1.2rem" }}>
-                  ≈ {pricePerSqm.toLocaleString("vi-VN")} ₫ / m²
+
+              <div ref={(el) => { reveals.current[2] = el; }} className="e-reveal e-detail-section" style={{ paddingLeft: 0, paddingRight: 0 }}>
+                <h2 className="e-h2">Vị Trí Đắc Địa</h2>
+                <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "2rem", color: "var(--e-muted)" }}>
+                  <MapPin size={20} color="var(--e-gold)" />
+                  <span style={{ fontSize: "1rem" }}>{property.address}</span>
                 </div>
-              )}
-              <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                <a href={providerContactHref} className="_btn-gold" style={btnGold}><Send size={14} />Gửi yêu cầu</a>
-                <a href={phoneHref || "#"} className="_btn-dark-outline"
-                  style={{ ...btnOutline, color: "rgba(255,255,255,0.6)", borderColor: "rgba(255,255,255,0.15)", opacity: ownerPhone ? 1 : 0.4, pointerEvents: ownerPhone ? "auto" : "none" }}>
-                  <Phone size={14} />Gọi ngay
-                </a>
+                {hasMapCoords ? (
+                  <div style={{ height: "450px", background: "var(--e-cream)", border: "none", borderRadius: "0", overflow: "hidden", margin: "0 -2px" }}>
+                    <AddressMap lat={coords[1]} lng={coords[0]} interactive={false} />
+                  </div>
+                ) : (
+                  <div style={{ height: "200px", background: "var(--e-cream)", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid var(--e-beige)", color: "var(--e-muted)" }}>
+                    Bản đồ hiện đang được cập nhật
+                  </div>
+                )}
+              </div>
+
+              <div ref={(el) => { reveals.current[3] = el; }} className="e-reveal e-detail-section" style={{ borderBottom: "none" }}>
+                <h2 className="e-h2">Thông Tin Pháp Lý</h2>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                  <div style={{ padding: "1.5rem", background: "var(--e-cream)", border: "1px solid var(--e-beige)" }}>
+                    <div style={{ fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "0.15em", marginBottom: "0.5rem" }}>Trạng Thái</div>
+                    <div style={{ fontSize: "1.1rem", fontFamily: "var(--e-serif)" }}>Sổ Hồng Riêng / Chính Chủ</div>
+                  </div>
+                  <div style={{ padding: "1.5rem", background: "var(--e-cream)", border: "1px solid var(--e-beige)" }}>
+                    <div style={{ fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "0.15em", marginBottom: "0.5rem" }}>Loại Hình</div>
+                    <div style={{ fontSize: "1.1rem", fontFamily: "var(--e-serif)" }}>{property.type} Cao Cấp</div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Owner */}
-            <div style={{ padding: "1.5rem", background: C.white, border: `1px solid ${C.border}`, display: "flex", flexDirection: "column", gap: "0.8rem" }}>
-              <div style={eyebrow}>Người đăng</div>
-              {owner ? (
-                <>
-                  <div style={{ fontFamily: "var(--e-serif)", fontSize: "1.12rem", color: C.charcoal }}>{owner.name}</div>
-                  {ownerEmail && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.82rem", color: C.muted }}>
-                      <Mail size={14} color={C.gold} />{ownerEmail}
+            {/* Right Column — Sticky Sidebar */}
+            <aside className="e-sticky-sidebar">
+              <div className="e-glass-card" style={{ padding: "2.5rem" }}>
+                <div style={{ textAlign: "center", marginBottom: "2rem" }}>
+                  <div className="e-category-tag" style={{ marginBottom: "0.5rem" }}>Liên Hệ Tư Vấn</div>
+                  <div style={{ fontFamily: "var(--e-serif)", fontSize: "2rem", color: "var(--e-charcoal)" }}>{formatCurrency(property.price)}</div>
+                  {pricePerSqm && (
+                    <div style={{ fontSize: "0.8rem", color: "var(--e-muted)", marginTop: "4px" }}>
+                      ≈ {pricePerSqm.toLocaleString()} ₫ / m²
                     </div>
                   )}
-                  {ownerPhone && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.82rem", color: C.muted }}>
-                      <Phone size={14} color={C.gold} />{ownerPhone}
-                    </div>
-                  )}
-                  {!ownerEmail && !ownerPhone && (
-                    <div style={{ fontSize: "0.8rem", color: C.light }}>Thông tin đang cập nhật</div>
-                  )}
-                </>
-              ) : (
-                <div style={{ fontSize: "0.84rem", color: C.muted }}>Thông tin đang được cập nhật.</div>
-              )}
-            </div>
-
-            {/* Contact form */}
-            <div style={{ padding: "1.5rem", background: C.offWhite, border: `1px solid ${C.border}`, display: "flex", flexDirection: "column", gap: "1rem" }}>
-              <div style={eyebrow}>Đặt lịch xem</div>
-              <form onSubmit={handleContactSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}>
-                {[
-                  { label: "Họ và tên", type: "text", placeholder: "Nhập tên của bạn" },
-                  { label: "Số điện thoại", type: "tel", placeholder: "0912 345 678" },
-                ].map((f) => (
-                  <label key={f.label} style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: C.light }}>
-                    {f.label}
-                    <input type={f.type} required placeholder={f.placeholder} className="_form-input"
-                      style={{ padding: "10px 12px", border: `1px solid ${C.border}`, background: C.white, fontSize: "0.88rem", color: C.charcoal, fontFamily: "inherit" }} />
-                  </label>
-                ))}
-                <label style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: C.light }}>
-                  Nội dung
-                  <textarea required rows={3} placeholder="Tôi muốn đặt lịch xem nhà..." className="_form-input"
-                    style={{ padding: "10px 12px", border: `1px solid ${C.border}`, background: C.white, fontSize: "0.88rem", color: C.charcoal, fontFamily: "inherit", resize: "vertical", minHeight: 90 }} />
-                </label>
-                <button type="submit" className="_btn-gold" style={btnGold}>Gửi yêu cầu <Send size={14} /></button>
-              </form>
-              {contactSent && (
-                <div className="_success"
-                  style={{ padding: "0.9rem 1rem", background: C.white, border: `1px solid ${C.border}`, borderLeft: `3px solid ${C.gold}`, fontSize: "0.82rem", color: C.muted, lineHeight: 1.65 }}>
-                  Yêu cầu đã gửi thành công. Bạn sẽ nhận phản hồi sớm từ người đăng.
                 </div>
-              )}
-            </div>
-          </aside>
-        </div>
 
-        {/* ══ RECOMMENDATIONS ══════════════════════════════════════════════ */}
+                <div style={{ borderTop: "1px solid var(--e-beige)", paddingTop: "2rem", marginBottom: "2rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1.5rem" }}>
+                    <div style={{ width: "50px", height: "50px", borderRadius: "50%", background: "var(--e-charcoal)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontFamily: "var(--e-serif)" }}>
+                      {owner?.name?.[0] || "O"}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>{owner?.name || "Premium Agent"}</div>
+                      <div style={{ fontSize: "0.75rem", color: "var(--e-gold)" }}>Professional Partner</div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <a href={`tel:${owner?.phone}`} className="e-btn-fill">
+                      <Phone size={16} /> Gọi Ngay
+                    </a>
+                    <a href={`mailto:${owner?.email}`} className="e-btn-outline">
+                      <Mail size={16} /> Gửi Email
+                    </a>
+                  </div>
+                </div>
+
+                <form onSubmit={handleContactSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                  <div style={{ fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--e-muted)" }}>Gửi Lời Nhắn</div>
+                  <input type="text" placeholder="Tên của bạn" className="e-contact-input" required />
+                  <input type="tel" placeholder="Số điện thoại" className="e-contact-input" required />
+                  <textarea placeholder="Tôi muốn tư vấn về bất động sản này..." className="e-contact-input" style={{ minHeight: "100px", resize: "none" }} required></textarea>
+                  <button type="submit" className="e-btn-fill" style={{ background: "var(--e-gold)", borderColor: "var(--e-gold)" }}>
+                    Gửi Yêu Cầu <ArrowRight size={16} />
+                  </button>
+                </form>
+
+                {contactSent && (
+                  <div style={{ marginTop: "1rem", padding: "12px", background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#166534", fontSize: "0.85rem", textAlign: "center", borderRadius: "4px" }}>
+                    Yêu cầu của bạn đã được gửi thành công!
+                  </div>
+                )}
+              </div>
+
+              {/* Security Badge */}
+              <div style={{ marginTop: "1.5rem", padding: "1rem", border: "1px dashed var(--e-gold)", display: "flex", alignItems: "center", gap: "12px", color: "var(--e-gold)" }}>
+                <CheckCircle2 size={24} />
+                <div>
+                  <div style={{ fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase" }}>Tin Đăng Đã Xác Thực</div>
+                  <div style={{ fontSize: "0.65rem", opacity: 0.8 }}>Pháp lý và thông tin đã được đội ngũ Estoria kiểm soát</div>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </main>
+
+        {/* 04 — RECOMMENDATIONS */}
         {recommendations.length > 0 && (
-          <section style={{ background: C.offWhite, borderTop: `1px solid ${C.border}`, padding: "3.5rem 2.5rem" }}>
-            <div style={{ maxWidth: 1240, margin: "0 auto" }}>
-              <Reveal>
-                <div style={eyebrow}>Gợi ý</div>
-                <h2 style={{ fontFamily: "var(--e-serif)", fontSize: "1.6rem", fontWeight: 500, color: C.charcoal, margin: "0.4rem 0 0" }}>
-                  Bất động sản tương tự
-                </h2>
-              </Reveal>
-              <div style={{ marginTop: "2rem", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(270px,1fr))", gap: "1.3rem" }}>
-                {recommendations.map((rec, i) => (
-                  <Reveal key={rec._id} delay={i * 80}>
-                    <LuxuryListingCard property={rec} />
-                  </Reveal>
+          <section style={{ padding: "5rem 5vw", background: "var(--e-cream)", borderTop: "1px solid var(--e-beige)" }}>
+            <div style={{ maxWidth: "1240px", margin: "0 auto" }}>
+              <div style={{ textAlign: "center", marginBottom: "4rem" }}>
+                <div className="e-category-tag">Gợi Ý</div>
+                <h2 className="e-h2" style={{ fontSize: "2.4rem", marginTop: "1rem" }}>Bất Động Sản Tương Tự</h2>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "2.5rem" }}>
+                {recommendations.slice(0, 4).map((rec) => (
+                  <LuxuryListingCard key={rec._id} property={rec} />
                 ))}
               </div>
             </div>
@@ -568,3 +585,12 @@ export const getServerSideProps: GetServerSideProps<PropertyDetailPageProps> = a
     return { props: { property: null, errorMessage: getErrorMessage(error), recommendations: [] } };
   }
 };
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof ApiError) {
+    if (error.statusCode === 404) return "Bất động sản không tồn tại hoặc đang bị ẩn.";
+    return error.message;
+  }
+  if (error instanceof Error) return error.message;
+  return "Hiện chưa thể tải chi tiết bất động sản.";
+}

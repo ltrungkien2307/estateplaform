@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import propertyService from "@/services/propertyService";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Property } from "@/types/property";
+import { formatVNDShort } from "@/utils/formatPrice";
 import Link from "next/link";
 import {
   Plus,
@@ -197,7 +198,7 @@ export default function ProviderProperties() {
 
                       <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap" }}>
                         {[
-                          { icon: <DollarSign size={13} />, text: new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(property.price) },
+                          { icon: <DollarSign size={13} />, text: formatVNDShort(property.price) },
                           { icon: <Ruler size={13} />, text: `${property.area} m²` },
                           { icon: <BedDouble size={13} />, text: `${property.bedrooms ?? 0} phòng ngủ` },
                         ].map(({ icon, text }) => (

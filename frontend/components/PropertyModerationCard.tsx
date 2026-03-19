@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import Image from "next/image";
 import { CheckCircle, XCircle } from "lucide-react";
 import type { Property } from "@/types/property";
+import { formatVNDShort } from "@/utils/formatPrice";
 
 interface PropertyModerationCardProps {
   property: Property;
@@ -52,10 +53,7 @@ export default function PropertyModerationCard({
           <div className="rounded-xl border border-boundary bg-surface p-2.5 shadow-sm">
             <p className="text-text-secondary text-xs uppercase tracking-wide">Giá</p>
             <p className="font-semibold text-primary-dark">
-              {new Intl.NumberFormat("vi-VN", {
-                style: "currency",
-                currency: "VND",
-              }).format(property.price)}
+              {formatVNDShort(property.price)}
             </p>
           </div>
           <div className="rounded-xl border border-boundary bg-surface p-2.5 shadow-sm">
