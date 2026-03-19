@@ -2,12 +2,14 @@ import { useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { useAuth } from '@/contexts/AuthContext';
 
 type Role = 'user' | 'provider';
 type Step = 1 | 2;
 
 export default function RegisterPage() {
     const router = useRouter();
+    const { signup } = useAuth();
     const [step, setStep] = useState<Step>(1);
     const [role, setRole] = useState<Role>('user');
     const [form, setForm] = useState({ name: '', email: '', password: '', passwordConfirm: '', address: '', phone: '' });
@@ -35,17 +37,38 @@ export default function RegisterPage() {
         setLoading(true);
         setError(null);
         try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/auth/signup`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ name: form.name, email: form.email, password: form.password, passwordConfirm: form.passwordConfirm, address: form.address, phone: form.phone, role }),
+            // Đăng ký + tự động đăng nhập luôn qua AuthContext
+            await signup({
+                name: form.name,
+                email: form.email,
+                password: form.password,
+                passwordConfirm: form.passwordConfirm,
+                address: form.address,
+                phone: form.phone,
+                role: 'user', // luôn tạo là user trước
             });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.message || 'Đăng ký thất bại');
+
+            // Nếu chọn provider → gửi role request
+            if (role === 'provider') {
+                const token = localStorage.getItem('estate_manager_token') || '';
+                const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+                await fetch(`${API}/api/users/role-request`, {
+                    method: 'POST',
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                });
+                // Redirect về profile với thông báo pending
+                router.push('/profile/settings?registered=provider');
+                return;
+            }
+
+            // User thường → về trang chính
             router.push('/');
+
         } catch (err: any) {
-            setError(err.message);
+            setError(err.message || 'Đăng ký thất bại');
         } finally {
             setLoading(false);
         }
@@ -105,7 +128,6 @@ export default function RegisterPage() {
                             position: 'absolute', inset: 0,
                             background: 'linear-gradient(135deg, rgba(17,28,20,0.82) 0%, rgba(17,28,20,0.68) 100%)',
                         }} />
-                        {/* Noise */}
                         <div style={{
                             position: 'absolute', inset: 0,
                             backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E")`,
@@ -253,6 +275,18 @@ export default function RegisterPage() {
                                                 </button>
                                             ))}
                                         </div>
+
+                                        {/* Provider notice */}
+                                        {role === 'provider' && (
+                                            <div style={{
+                                                marginTop: 8, padding: '10px 12px',
+                                                background: '#fffbeb', border: '1px solid #fcd34d',
+                                                fontSize: '0.74rem', color: '#92400e',
+                                                fontFamily: 'var(--e-sans)', lineHeight: 1.6,
+                                            }}>
+                                                ✦ Tài khoản sẽ được tạo và yêu cầu Provider gửi đến admin xét duyệt trong <strong>1–3 ngày</strong>.
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Name */}
@@ -287,7 +321,6 @@ export default function RegisterPage() {
                                                 <EyeIcon show={showPassword} />
                                             </button>
                                         </div>
-                                        {/* Strength bar */}
                                         {form.password && (
                                             <div style={{ display: 'flex', gap: 3, marginTop: 7 }}>
                                                 {[1, 2, 3, 4].map(i => (
@@ -371,7 +404,7 @@ export default function RegisterPage() {
                                         {[
                                             { label: 'Họ tên', value: form.name },
                                             { label: 'Email', value: form.email },
-                                            { label: 'Vai trò', value: role === 'provider' ? 'Chủ Nhà (Provider)' : 'Khách Hàng' },
+                                            { label: 'Vai trò', value: role === 'provider' ? 'Chủ Nhà (Provider) — Chờ duyệt' : 'Khách Hàng' },
                                         ].map(item => (
                                             <div key={item.label} style={{
                                                 display: 'flex', justifyContent: 'space-between',

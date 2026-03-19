@@ -15,28 +15,15 @@ const NAV_LINKS = [
     { href: '#gallery', label: 'Thư Viện' },
 ];
 
-// ─── Avatar initials ──────────────────────────────────────────
 function getInitials(name?: string | null): string {
     if (!name) return '?';
-    return name
-        .split(' ')
-        .map((n) => n[0])
-        .slice(0, 2)
-        .join('')
-        .toUpperCase();
+    return name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase();
 }
 
-// ─── Role label ───────────────────────────────────────────────
 function getRoleLabel(role?: string): string {
     if (role === 'admin') return 'Quản Trị Viên';
     if (role === 'provider') return 'Nhà Cung Cấp';
     return 'Khách Hàng';
-}
-
-function getDashboardHref(role?: string): string {
-    if (role === 'admin') return '/admin/dashboard';
-    if (role === 'provider') return '/provider/dashboard';
-    return '/profile/settings';
 }
 
 export default function LuxuryNavbar({ onPostClick, variant = 'default' }: LuxuryNavbarProps) {
@@ -45,12 +32,12 @@ export default function LuxuryNavbar({ onPostClick, variant = 'default' }: Luxur
 
     const [scrolled, setScrolled] = useState(false);
     const [hovered, setHovered] = useState<string | null>(null);
-    const [ctaHovered, setCtaHovered] = useState(false);
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     const isLoggedIn = !!user;
     const isScrolled = variant === 'light' ? true : scrolled;
+    const isUser = user?.role === 'user' || (!user?.role && isLoggedIn);
 
     useEffect(() => {
         const handleScroll = () => setScrolled(window.scrollY > 60);
@@ -58,7 +45,6 @@ export default function LuxuryNavbar({ onPostClick, variant = 'default' }: Luxur
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
 
-    // ─── Close dropdown khi click ngoài ──────────────────────
     useEffect(() => {
         function handleClickOutside(e: MouseEvent) {
             if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -75,6 +61,31 @@ export default function LuxuryNavbar({ onPostClick, variant = 'default' }: Luxur
         router.push('/');
     }
 
+    const userMenuItems = [
+        { href: '/profile/settings', label: 'Hồ Sơ', icon: '◎' },
+        { href: '/profile/kyc', label: 'Xác Minh KYC', icon: '✦' },
+    ];
+
+    const adminMenuItems = [
+        { href: '/admin/dashboard', label: 'Dashboard', icon: '▦' },
+        { href: '/profile/settings', label: 'Hồ Sơ', icon: '◎' },
+        { href: '/admin/kyc-management', label: 'Xác Minh KYC', icon: '✦' },
+        { href: '/subscription/plans', label: 'Gói Dịch Vụ', icon: '◈' },
+    ];
+
+    const providerMenuItems = [
+        { href: '/provider/dashboard', label: 'Dashboard', icon: '▦' },
+        { href: '/profile/settings', label: 'Hồ Sơ', icon: '◎' },
+        { href: '/provider/dashboard?view=kyc', label: 'Xác Minh KYC', icon: '✦' },
+        { href: '/provider/dashboard?view=plans', label: 'Gói Dịch Vụ', icon: '◈' },
+    ];
+
+    function getMenuItems() {
+        if (user?.role === 'admin') return adminMenuItems;
+        if (user?.role === 'provider') return providerMenuItems;
+        return userMenuItems;
+    }
+
     return (
         <nav className={`e-nav${isScrolled ? ' scrolled' : ''}`}>
             <Link href="/" className="e-nav-logo">
@@ -84,9 +95,10 @@ export default function LuxuryNavbar({ onPostClick, variant = 'default' }: Luxur
             <div className="e-nav-links">
                 {NAV_LINKS.map((link) => {
                     const isHov = hovered === link.href;
-                    const resolvedHref = link.href.startsWith('#') && router.pathname !== '/'
-                        ? `/${link.href}`
-                        : link.href;
+                    const resolvedHref =
+                        link.href.startsWith('#') && router.pathname !== '/'
+                            ? `/${link.href}`
+                            : link.href;
                     return (
                         <Link
                             key={link.href}
@@ -104,8 +116,7 @@ export default function LuxuryNavbar({ onPostClick, variant = 'default' }: Luxur
                         >
                             {link.label}
                             <span style={{
-                                position: 'absolute',
-                                bottom: 0, left: 0,
+                                position: 'absolute', bottom: 0, left: 0,
                                 height: '1px',
                                 width: isHov ? '100%' : '0%',
                                 background: isScrolled ? 'var(--e-charcoal)' : 'var(--e-white)',
@@ -117,60 +128,46 @@ export default function LuxuryNavbar({ onPostClick, variant = 'default' }: Luxur
                 })}
             </div>
 
-            {/* ── Right side: Avatar OR CTA ── */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-
                 {isLoggedIn ? (
-                    /* ── Avatar + Dropdown ── */
                     <div ref={dropdownRef} style={{ position: 'relative' }}>
+                        {/* Avatar button */}
                         <button
                             onClick={() => setDropdownOpen(p => !p)}
                             style={{
                                 display: 'flex', alignItems: 'center', gap: '0.6rem',
-                                background: 'none', border: 'none', cursor: 'pointer',
-                                padding: '4px',
+                                background: 'none', border: 'none', cursor: 'pointer', padding: '4px',
                             }}
                         >
-                            {/* Avatar circle */}
                             <div style={{
                                 width: 36, height: 36, borderRadius: '50%',
                                 background: isScrolled ? 'var(--e-charcoal)' : 'rgba(255,255,255,0.15)',
                                 border: `2px solid ${isScrolled ? 'var(--e-gold)' : 'rgba(255,255,255,0.5)'}`,
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                fontFamily: 'var(--e-serif)',
-                                fontSize: '0.78rem', fontWeight: 600,
-                                color: isScrolled ? 'var(--e-white)' : 'var(--e-white)',
+                                fontFamily: 'var(--e-serif)', fontSize: '0.78rem', fontWeight: 600,
+                                color: 'var(--e-white)',
                                 transition: 'all 0.3s var(--e-ease)',
-                                overflow: 'hidden',
-                                flexShrink: 0,
+                                overflow: 'hidden', flexShrink: 0,
                             }}>
                                 {user?.avatar ? (
-                                    <img
-                                        src={user.avatar}
-                                        alt={user.name}
-                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                    />
+                                    <img src={user.avatar} alt={user.name}
+                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                 ) : (
                                     getInitials(user?.name)
                                 )}
                             </div>
-
-                            {/* Chevron */}
-                            <svg
-                                width={10} height={10}
-                                viewBox="0 0 10 6" fill="none"
+                            <svg width={10} height={10} viewBox="0 0 10 6" fill="none"
                                 stroke={isScrolled ? 'var(--e-muted)' : 'rgba(255,255,255,0.6)'}
                                 strokeWidth={1.5}
                                 style={{
                                     transition: 'transform 0.25s var(--e-ease)',
                                     transform: dropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                                }}
-                            >
+                                }}>
                                 <path d="M1 1l4 4 4-4" />
                             </svg>
                         </button>
 
-                        {/* ── Dropdown Menu ── */}
+                        {/* Dropdown */}
                         {dropdownOpen && (
                             <div style={{
                                 position: 'absolute', top: 'calc(100% + 12px)', right: 0,
@@ -181,7 +178,7 @@ export default function LuxuryNavbar({ onPostClick, variant = 'default' }: Luxur
                                 zIndex: 200,
                                 animation: 'dropdownIn 0.2s var(--e-ease)',
                             }}>
-                                {/* User info */}
+                                {/* User info header */}
                                 <div style={{
                                     padding: '1.2rem 1.4rem',
                                     borderBottom: '1px solid var(--e-beige)',
@@ -195,9 +192,8 @@ export default function LuxuryNavbar({ onPostClick, variant = 'default' }: Luxur
                                         {getRoleLabel(user?.role)}
                                     </div>
                                     <div style={{
-                                        fontFamily: 'var(--e-serif)',
-                                        fontSize: '0.95rem', fontWeight: 500,
-                                        color: 'var(--e-charcoal)', marginBottom: 2,
+                                        fontFamily: 'var(--e-serif)', fontSize: '0.95rem',
+                                        fontWeight: 500, color: 'var(--e-charcoal)', marginBottom: 2,
                                     }}>
                                         {user?.name}
                                     </div>
@@ -208,12 +204,7 @@ export default function LuxuryNavbar({ onPostClick, variant = 'default' }: Luxur
 
                                 {/* Menu items */}
                                 <div style={{ padding: '0.5rem 0' }}>
-                                    {[
-                                        { href: getDashboardHref(user?.role), label: 'Dashboard', icon: '▦' },
-                                        { href: '/profile/settings', label: 'Hồ Sơ', icon: '◎' },
-                                        { href: user?.role === 'admin' ? '/admin/kyc-management' : user?.role === 'provider' ? '/provider/dashboard?view=kyc' : '/profile/kyc', label: 'Xác Minh KYC', icon: '✦' },
-                                        { href: user?.role === 'provider' ? '/provider/dashboard?view=plans' : '/subscription/plans', label: 'Gói Dịch Vụ', icon: '◈' },
-                                    ].map((item) => (
+                                    {getMenuItems().map((item) => (
                                         <Link key={item.href} href={item.href}
                                             onClick={() => setDropdownOpen(false)}
                                             style={{
@@ -238,9 +229,39 @@ export default function LuxuryNavbar({ onPostClick, variant = 'default' }: Luxur
                                             {item.label}
                                         </Link>
                                     ))}
+
+                                    {/* Đổi sang Provider — chỉ hiện với role user */}
+                                    {isUser && (
+                                        <Link
+                                            href="/profile/settings#become-provider"
+                                            onClick={() => setDropdownOpen(false)}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', gap: '0.7rem',
+                                                padding: '0.9rem 1.4rem 0.7rem',
+                                                fontSize: '0.78rem', color: 'var(--e-muted)',
+                                                textDecoration: 'none', fontWeight: 500,
+                                                transition: 'background 0.15s, color 0.15s',
+                                                borderTop: '1px solid var(--e-beige)',
+                                                marginTop: '0.3rem',
+                                            }}
+                                            onMouseEnter={e => {
+                                                (e.currentTarget as HTMLAnchorElement).style.background = 'var(--e-cream)';
+                                                (e.currentTarget as HTMLAnchorElement).style.color = 'var(--e-charcoal)';
+                                            }}
+                                            onMouseLeave={e => {
+                                                (e.currentTarget as HTMLAnchorElement).style.background = 'transparent';
+                                                (e.currentTarget as HTMLAnchorElement).style.color = 'var(--e-muted)';
+                                            }}
+                                        >
+                                            <span style={{ fontSize: '0.8rem', color: 'var(--e-gold)', opacity: 0.8 }}>
+                                                ◆
+                                            </span>
+                                            Đổi sang Provider
+                                        </Link>
+                                    )}
                                 </div>
 
-                                {/* Divider + Logout */}
+                                {/* Logout */}
                                 <div style={{ borderTop: '1px solid var(--e-beige)', padding: '0.5rem 0' }}>
                                     <button
                                         onClick={handleLogout}
@@ -250,8 +271,7 @@ export default function LuxuryNavbar({ onPostClick, variant = 'default' }: Luxur
                                             background: 'none', border: 'none', cursor: 'pointer',
                                             fontSize: '0.78rem', color: '#c0392b',
                                             fontWeight: 600, letterSpacing: '0.04em',
-                                            textAlign: 'left',
-                                            transition: 'background 0.15s',
+                                            textAlign: 'left', transition: 'background 0.15s',
                                             fontFamily: 'var(--e-sans)',
                                         }}
                                         onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = '#fdf2f2'}
@@ -265,35 +285,38 @@ export default function LuxuryNavbar({ onPostClick, variant = 'default' }: Luxur
                         )}
                     </div>
                 ) : (
-                    /* ── CTA Button (chưa đăng nhập) ── */
-                    <button
-                        className="e-nav-cta"
-                        onClick={onPostClick}
-                        onMouseEnter={() => setCtaHovered(true)}
-                        onMouseLeave={() => setCtaHovered(false)}
+                    /* ── Nút Đăng Nhập khi chưa login ── */
+                    <Link
+                        href="/auth/login"
                         style={{
-                            position: 'relative', overflow: 'hidden',
-                            background: isScrolled
-                                ? (ctaHovered ? 'var(--e-gold)' : 'var(--e-charcoal)')
-                                : 'transparent',
-                            borderColor: isScrolled
-                                ? (ctaHovered ? 'var(--e-gold)' : 'var(--e-charcoal)')
-                                : (ctaHovered ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.6)'),
-                            color: isScrolled ? 'var(--e-white)' : (ctaHovered ? 'var(--e-charcoal)' : 'var(--e-white)'),
-                            transition: 'all 0.3s cubic-bezier(0.22,1,0.36,1)',
+                            display: 'inline-flex', alignItems: 'center',
+                            padding: '0.55rem 1.4rem',
+                            fontFamily: 'var(--e-sans)', fontSize: '0.74rem',
+                            fontWeight: 700, letterSpacing: '0.1em',
+                            textTransform: 'uppercase', textDecoration: 'none',
+                            border: `1px solid ${isScrolled ? 'var(--e-charcoal)' : 'rgba(255,255,255,0.6)'}`,
+                            color: isScrolled ? 'var(--e-charcoal)' : 'var(--e-white)',
+                            background: 'transparent',
+                            transition: 'all 0.25s cubic-bezier(0.22,1,0.36,1)',
+                        }}
+                        onMouseEnter={e => {
+                            (e.currentTarget as HTMLAnchorElement).style.background =
+                                isScrolled ? 'var(--e-charcoal)' : 'var(--e-white)';
+                            (e.currentTarget as HTMLAnchorElement).style.color =
+                                isScrolled ? 'var(--e-white)' : 'var(--e-charcoal)';
+                            (e.currentTarget as HTMLAnchorElement).style.borderColor =
+                                isScrolled ? 'var(--e-charcoal)' : 'var(--e-white)';
+                        }}
+                        onMouseLeave={e => {
+                            (e.currentTarget as HTMLAnchorElement).style.background = 'transparent';
+                            (e.currentTarget as HTMLAnchorElement).style.color =
+                                isScrolled ? 'var(--e-charcoal)' : 'var(--e-white)';
+                            (e.currentTarget as HTMLAnchorElement).style.borderColor =
+                                isScrolled ? 'var(--e-charcoal)' : 'rgba(255,255,255,0.6)';
                         }}
                     >
-                        {!isScrolled && (
-                            <span style={{
-                                position: 'absolute', inset: 0,
-                                background: 'var(--e-white)',
-                                transform: ctaHovered ? 'translateX(0)' : 'translateX(-101%)',
-                                transition: 'transform 0.35s cubic-bezier(0.22,1,0.36,1)',
-                                zIndex: 0,
-                            }} />
-                        )}
-                        <span style={{ position: 'relative', zIndex: 1 }}>Đăng Bài</span>
-                    </button>
+                        Đăng Nhập
+                    </Link>
                 )}
             </div>
 

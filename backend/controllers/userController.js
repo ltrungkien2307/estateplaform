@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const RoleRequest = require('../models/RoleRequest');
 const Joi = require('joi');
 const { uploadToCloudinary } = require('../utils/cloudinary');
 const {
@@ -32,16 +33,9 @@ exports.getMe = async (req, res, next) => {
   try {
     const user = await User.findById(req.user.id);
     if (!user) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'User not found',
-      });
+      return res.status(404).json({ status: 'error', message: 'User not found' });
     }
-
-    res.status(200).json({
-      status: 'success',
-      data: { user },
-    });
+    res.status(200).json({ status: 'success', data: { user } });
   } catch (err) {
     next(err);
   }
@@ -53,13 +47,9 @@ exports.updateMe = async (req, res, next) => {
   try {
     const { value, error } = updateProfileSchema.validate(req.body);
     if (error) {
-      return res.status(400).json({
-        status: 'error',
-        message: error.details[0].message,
-      });
+      return res.status(400).json({ status: 'error', message: error.details[0].message });
     }
 
-    // Prevent password/role updates through this route
     if (req.body.password || req.body.role) {
       return res.status(400).json({
         status: 'error',
@@ -72,10 +62,7 @@ exports.updateMe = async (req, res, next) => {
       runValidators: true,
     });
 
-    res.status(200).json({
-      status: 'success',
-      data: { user: updatedUser },
-    });
+    res.status(200).json({ status: 'success', data: { user: updatedUser } });
   } catch (err) {
     next(err);
   }
@@ -87,44 +74,29 @@ exports.changePassword = async (req, res, next) => {
   try {
     const { value, error } = changePasswordSchema.validate(req.body);
     if (error) {
-      return res.status(400).json({
-        status: 'error',
-        message: error.details[0].message,
-      });
+      return res.status(400).json({ status: 'error', message: error.details[0].message });
     }
 
-    // Get user with password
     const user = await User.findById(req.user.id).select('+password');
     if (!user) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'User not found',
-      });
+      return res.status(404).json({ status: 'error', message: 'User not found' });
     }
 
-    // Verify current password
     const isCorrect = await user.correctPassword(value.currentPassword, user.password);
     if (!isCorrect) {
-      return res.status(401).json({
-        status: 'error',
-        message: 'Current password is incorrect',
-      });
+      return res.status(401).json({ status: 'error', message: 'Current password is incorrect' });
     }
 
-    // Update password (pre-save hook will hash it)
     user.password = value.newPassword;
     await user.save();
 
-    res.status(200).json({
-      status: 'success',
-      message: 'Password updated successfully',
-    });
+    res.status(200).json({ status: 'success', message: 'Password updated successfully' });
   } catch (err) {
     next(err);
   }
 };
 
-// ─── Submit KYC Documents (CCCD) ───────────────────────────
+// ─── Submit KYC Documents (CCCD) ─────────────────────────────
 // PATCH /api/users/kyc/submit
 exports.submitKycDocuments = async (req, res, next) => {
   try {
@@ -154,10 +126,7 @@ exports.submitKycDocuments = async (req, res, next) => {
 
     const user = await User.findById(req.user.id);
     if (!user) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'User not found',
-      });
+      return res.status(404).json({ status: 'error', message: 'User not found' });
     }
 
     let uploadedUrls;
@@ -186,37 +155,22 @@ exports.submitKycDocuments = async (req, res, next) => {
     try {
       frontOcrResult = await runOcrOnBuffer(frontFile.buffer, 'cccdFront');
     } catch (error) {
-      ocrErrors.push({
-        side: 'cccdFront',
-        message: error?.message || 'OCR failed for cccdFront',
-      });
+      ocrErrors.push({ side: 'cccdFront', message: error?.message || 'OCR failed for cccdFront' });
     }
 
     try {
       backOcrResult = await runOcrOnBuffer(backFile.buffer, 'cccdBack');
     } catch (error) {
-      ocrErrors.push({
-        side: 'cccdBack',
-        message: error?.message || 'OCR failed for cccdBack',
-      });
+      ocrErrors.push({ side: 'cccdBack', message: error?.message || 'OCR failed for cccdBack' });
     }
 
-    const extractedData = buildKycExtractedData({
-      frontOcrResult,
-      backOcrResult,
-      ocrErrors,
-    });
-
+    const extractedData = buildKycExtractedData({ frontOcrResult, backOcrResult, ocrErrors });
     const comparisonResult = buildKycComparisonResult({
       user,
       extractedData,
       declaredIdNumber: req.body?.declaredIdNumber || '',
     });
-
-    const decision = decideKycOutcome({
-      comparisonResult,
-      extractedData,
-    });
+    const decision = decideKycOutcome({ comparisonResult, extractedData });
 
     user.kycExtractedData = extractedData;
     user.kycComparisonResult = {
@@ -252,17 +206,68 @@ exports.submitKycDocuments = async (req, res, next) => {
   }
 };
 
+// ─── Get My Role Request Status ──────────────────────────────
+// GET /api/users/role-request/me
+exports.getMyRoleRequest = async (req, res, next) => {
+  try {
+    const request = await RoleRequest.findOne({ userId: req.user.id })
+      .sort({ createdAt: -1 });
+
+    if (!request) {
+      return res.status(200).json({ status: 'none' });
+    }
+
+    return res.status(200).json({
+      status: request.status,
+      rejectionReason: request.rejectionReason || '',
+      createdAt: request.createdAt,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── Create Role Request (user → provider) ───────────────────
+// POST /api/users/role-request
+exports.createRoleRequest = async (req, res, next) => {
+  try {
+    if (req.user.role !== 'user') {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Tài khoản của bạn không cần đổi role.',
+      });
+    }
+
+    const existing = await RoleRequest.findOne({
+      userId: req.user.id,
+      status: 'pending',
+    });
+    if (existing) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Bạn đã có yêu cầu đang chờ duyệt.',
+      });
+    }
+
+    const request = await RoleRequest.create({ userId: req.user.id });
+
+    return res.status(201).json({
+      status: 'success',
+      message: 'Yêu cầu đã được gửi thành công.',
+      data: { status: request.status },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // ─── Get All Users (Admin Only) ──────────────────────────────
 // GET /api/users
 exports.getAllUsers = async (req, res, next) => {
   try {
-    // Support filtering by role
     const filter = {};
-    if (req.query.role) {
-      filter.role = req.query.role;
-    }
+    if (req.query.role) filter.role = req.query.role;
 
-    // Support pagination
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 20;
     const skip = (page - 1) * limit;
@@ -290,22 +295,15 @@ exports.getUserById = async (req, res, next) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'No user found with that ID',
-      });
+      return res.status(404).json({ status: 'error', message: 'No user found with that ID' });
     }
-
-    res.status(200).json({
-      status: 'success',
-      data: { user },
-    });
+    res.status(200).json({ status: 'success', data: { user } });
   } catch (err) {
     next(err);
   }
 };
 
-// ─── Update User Role (Admin Only) ──────────────────────────
+// ─── Update User Role (Admin Only) ───────────────────────────
 // PATCH /api/users/:id/role
 exports.updateUserRole = async (req, res, next) => {
   try {
@@ -324,37 +322,73 @@ exports.updateUserRole = async (req, res, next) => {
     );
 
     if (!user) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'No user found with that ID',
-      });
+      return res.status(404).json({ status: 'error', message: 'No user found with that ID' });
     }
+
+    res.status(200).json({ status: 'success', data: { user } });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── Delete User (Admin Only) ────────────────────────────────
+// DELETE /api/users/:id
+exports.deleteUser = async (req, res, next) => {
+  try {
+    const user = await User.findByIdAndDelete(req.params.id);
+    if (!user) {
+      return res.status(404).json({ status: 'error', message: 'No user found with that ID' });
+    }
+    res.status(204).json({ status: 'success', data: null });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── Get Users for KYC Review (Admin Only) ───────────────────
+// GET /api/users/kyc-review
+exports.getUsersForKycReview = async (req, res, next) => {
+  try {
+    const filter = {};
+    if (req.query.role) filter.role = req.query.role;
+    if (req.query.kycStatus) filter.kycStatus = req.query.kycStatus;
+
+    const sort = req.query.sort === 'oldest' ? 'createdAt' : '-createdAt';
+    const limit = parseInt(req.query.limit, 10) || 100;
+
+    const users = await User.find(filter).sort(sort).limit(limit);
 
     res.status(200).json({
       status: 'success',
-      data: { user },
+      results: users.length,
+      data: { users },
     });
   } catch (err) {
     next(err);
   }
 };
 
-// ─── Deactivate User (Admin Only) ───────────────────────────
-// DELETE /api/users/:id
-exports.deleteUser = async (req, res, next) => {
+// ─── Update User KYC Status (Admin Only) ─────────────────────
+// PATCH /api/users/:id/kyc
+exports.updateUserKycStatus = async (req, res, next) => {
   try {
-    const user = await User.findByIdAndDelete(req.params.id);
+    const { isVerified, kycStatus, kycRejectionReason } = req.body;
+
+    const updateData = {};
+    if (typeof isVerified === 'boolean') updateData.isVerified = isVerified;
+    if (kycStatus) updateData.kycStatus = kycStatus;
+    if (kycRejectionReason !== undefined) updateData.kycRejectionReason = kycRejectionReason;
+
+    const user = await User.findByIdAndUpdate(req.params.id, updateData, {
+      new: true,
+      runValidators: true,
+    });
+
     if (!user) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'No user found with that ID',
-      });
+      return res.status(404).json({ status: 'error', message: 'No user found with that ID' });
     }
 
-    res.status(204).json({
-      status: 'success',
-      data: null,
-    });
+    res.status(200).json({ status: 'success', data: { user } });
   } catch (err) {
     next(err);
   }
