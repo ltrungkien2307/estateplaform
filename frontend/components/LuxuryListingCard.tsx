@@ -49,12 +49,12 @@ export default function LuxuryListingCard({ property: p }: LuxuryListingCardProp
     const getImgSource = (img: any, p: any) => {
         if (typeof img === 'string') return img;
         if (img && typeof img === 'object' && (img.url || img.secure_url)) return img.url || img.secure_url;
-        
+
         // Fallback to p.image if available
         const singleImg = p.image;
         if (typeof singleImg === 'string') return singleImg;
         if (singleImg && typeof singleImg === 'object' && (singleImg.url || singleImg.secure_url)) return singleImg.url || singleImg.secure_url;
-        
+
         return 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=1200&q=80';
     };
 

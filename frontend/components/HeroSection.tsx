@@ -14,8 +14,11 @@ export default function HeroSection({ totalListings }: HeroSectionProps) {
                 }}
             />
 
-            {/* Overlay */}
+            {/* Overlay — tối hơn + gradient từ dưới */}
             <div className="e-hero-overlay" />
+
+            {/* Vignette hai bên */}
+            <div className="e-hero-vignette" />
 
             {/* Content */}
             <div className="e-hero-content">
@@ -98,6 +101,7 @@ export default function HeroSection({ totalListings }: HeroSectionProps) {
                     textTransform: 'uppercase',
                     color: 'rgba(255,255,255,0.35)',
                     fontWeight: 600,
+                    textShadow: '0 1px 4px rgba(0,0,0,0.5)',
                 }}>
                     Cuộn xuống
                 </span>
@@ -113,6 +117,78 @@ export default function HeroSection({ totalListings }: HeroSectionProps) {
                         50%  { transform: scaleY(1); transform-origin: top; }
                         51%  { transform: scaleY(1); transform-origin: bottom; }
                         100% { transform: scaleY(0); transform-origin: bottom; }
+                    }
+
+                    /* ── Overlay: tối hơn + gradient từ dưới lên ── */
+                    .e-hero-overlay {
+                        background: linear-gradient(
+                            to bottom,
+                            rgba(10,10,8,0.62) 0%,
+                            rgba(10,10,8,0.70) 60%,
+                            rgba(10,10,8,0.85) 100%
+                        ) !important;
+                    }
+
+                    /* ── Vignette hai bên ── */
+                    .e-hero-vignette {
+                        position: absolute;
+                        inset: 0;
+                        background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.45) 100%);
+                        pointer-events: none;
+                        z-index: 1;
+                    }
+
+                    /* ── h1: text-shadow nhẹ tăng nổi ── */
+                    .e-hero h1 {
+                        text-shadow: 0 2px 24px rgba(0,0,0,0.55), 0 1px 4px rgba(0,0,0,0.4);
+                        letter-spacing: -0.02em;
+                    }
+
+                    /* ── em "Giá Trị": gold gradient + drop-shadow ── */
+                    .e-hero h1 em {
+                        font-style: italic;
+                        background: linear-gradient(135deg, #d4b07a 0%, #f0d49a 50%, #c49a55 100%);
+                        -webkit-background-clip: text;
+                        -webkit-text-fill-color: transparent;
+                        background-clip: text;
+                        text-shadow: none;
+                        filter: drop-shadow(0 2px 12px rgba(180,140,60,0.4));
+                    }
+
+                    /* ── desc: shadow nhẹ ── */
+                    .e-hero-desc {
+                        text-shadow: 0 1px 8px rgba(0,0,0,0.5);
+                    }
+
+                    /* ── Stats box: transparent hoàn toàn ── */
+                    .e-hero-right {
+                        background: transparent !important;
+                        border: none !important;
+                        backdrop-filter: none !important;
+                        -webkit-backdrop-filter: none !important;
+                    }
+
+                    /* ── stat number: shadow ── */
+                    .e-hero-stat-num {
+                        text-shadow: 0 2px 16px rgba(0,0,0,0.4);
+                    }
+
+                    /* ── Tag: border + blur ── */
+                    .e-hero-tag {
+                        border: 0.5px solid rgba(255,255,255,0.2) !important;
+                        border-radius: 2px;
+                        backdrop-filter: blur(4px);
+                        -webkit-backdrop-filter: blur(4px);
+                    }
+
+                    /* ── Primary button shadow ── */
+                    .e-hero .e-btn-primary {
+                        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                    }
+
+                    /* ── Ghost button shadow ── */
+                    .e-hero .e-btn-ghost {
+                        text-shadow: 0 1px 6px rgba(0,0,0,0.5);
                     }
                 `}</style>
             </div>
