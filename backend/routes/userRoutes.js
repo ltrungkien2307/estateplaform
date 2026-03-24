@@ -61,8 +61,14 @@ router.patch(
   userController.submitKycDocuments
 );
 
+// ─── Role Request Routes ──────────────────────────────────────
+// Phải đặt TRƯỚC router.use(restrictTo('admin')) và TRƯỚC /:id
+router.get('/role-request/me', userController.getMyRoleRequest);
+router.post('/role-request', userController.createRoleRequest);
+
 // ─── Admin Only Routes ───────────────────────────────────────
 router.use(authController.restrictTo('admin'));
+
 /**
  * @swagger
  * /users:

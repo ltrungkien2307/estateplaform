@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import Image from "next/image";
 import { CheckCircle, XCircle } from "lucide-react";
 import type { Property } from "@/types/property";
+import { formatVNDShort } from "@/utils/formatPrice";
 
 interface PropertyModerationCardProps {
   property: Property;
@@ -18,6 +19,9 @@ export default function PropertyModerationCard({
 }: PropertyModerationCardProps) {
   const [showRejectReason, setShowRejectReason] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
+
+  const isImageUrl = (url: string) =>
+    /\/image\/upload\//.test(url) || /\.(png|jpe?g|webp|gif|bmp|svg)(\?|$)/i.test(url);
 
   const handleReject = async () => {
     if (!rejectReason.trim()) {
@@ -49,10 +53,7 @@ export default function PropertyModerationCard({
           <div className="rounded-xl border border-boundary bg-surface p-2.5 shadow-sm">
             <p className="text-text-secondary text-xs uppercase tracking-wide">Giá</p>
             <p className="font-semibold text-primary-dark">
-              {new Intl.NumberFormat("vi-VN", {
-                style: "currency",
-                currency: "VND",
-              }).format(property.price)}
+              {formatVNDShort(property.price)}
             </p>
           </div>
           <div className="rounded-xl border border-boundary bg-surface p-2.5 shadow-sm">
@@ -85,6 +86,34 @@ export default function PropertyModerationCard({
                 >
                   {amenity}
                 </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {property.ownershipDocuments && property.ownershipDocuments.length > 0 && (
+          <div>
+            <p className="text-text-secondary text-sm font-medium mb-2">Giấy tờ pháp lý</p>
+            <div className="grid grid-cols-2 gap-2">
+              {property.ownershipDocuments.map((docUrl, idx) => (
+                <a
+                  key={`${docUrl}-${idx}`}
+                  href={docUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-xl border border-boundary bg-surface p-2 text-xs text-text-primary hover:border-primary-dark transition-colors"
+                >
+                  {isImageUrl(docUrl) ? (
+                    <div className="relative h-20 w-full overflow-hidden rounded-lg bg-background-light">
+                      <Image src={docUrl} alt={`Giấy tờ ${idx + 1}`} fill className="object-cover" />
+                    </div>
+                  ) : (
+                    <div className="flex h-20 items-center justify-center text-text-secondary">
+                      Tài liệu {idx + 1}
+                    </div>
+                  )}
+                  <div className="mt-2 text-xs font-medium text-text-primary">Xem giấy tờ {idx + 1}</div>
+                </a>
               ))}
             </div>
           </div>

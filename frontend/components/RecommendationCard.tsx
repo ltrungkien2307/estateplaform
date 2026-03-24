@@ -2,6 +2,7 @@ import React from "react";
 import Image from "next/image";
 import { BedDouble, Bath, Ruler } from "lucide-react";
 import type { Property } from "@/types/property";
+import { formatVNDShort } from "@/utils/formatPrice";
 
 interface RecommendationCardProps {
   property: Property;
@@ -26,10 +27,7 @@ const RecommendationCard = React.forwardRef<HTMLDivElement, RecommendationCardPr
             className="object-cover transition-transform duration-normal group-hover:scale-105"
           />
           <div className="absolute top-2 right-2 rounded-full border border-boundary bg-surface px-3 py-1 text-sm font-semibold text-text-primary shadow-sm backdrop-blur-md">
-            {new Intl.NumberFormat("vi-VN", {
-              style: "currency",
-              currency: "VND",
-            }).format(property.price)}
+            {formatVNDShort(property.price)}
           </div>
         </div>
         <div className="pt-4 pb-2 px-1">

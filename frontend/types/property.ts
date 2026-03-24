@@ -46,10 +46,17 @@ export interface PropertyFilters {
   locationText?: string;
   priceMin?: number;
   priceMax?: number;
+  areaMin?: number;
+  areaMax?: number;
   type?: PropertyType;
+  types?: PropertyType[];
   bedrooms?: number;
+  bedroomsGte?: number;
   bathrooms?: number;
+  bathroomsGte?: number;
   furnished?: boolean;
+  ownerId?: string;
+  status?: PropertyStatus;
   sort?: string;
   limit?: number;
   page?: number;
