@@ -124,9 +124,36 @@ app.use((err, req, res, next) => {
 });
 
 // ─── Start Server ────────────────────────────────────────────
+const DB_RETRY_DELAY_MS = Number(process.env.DB_RETRY_DELAY_MS || 5000);
+const DB_MAX_RETRIES = Number(process.env.DB_MAX_RETRIES || 0); // 0 = retry forever
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const connectDBWithRetry = async () => {
+    let attempt = 0;
+    while (true) {
+        attempt += 1;
+        try {
+            await connectDB();
+            return;
+        } catch (error) {
+            const message = error?.message || String(error);
+            const shouldStop = DB_MAX_RETRIES > 0 && attempt >= DB_MAX_RETRIES;
+
+            console.error(`[DB] Connection attempt ${attempt} failed: ${message}`);
+            if (shouldStop) {
+                throw new Error(`Database connection failed after ${attempt} attempt(s)`);
+            }
+
+            console.warn(`[DB] Retrying in ${DB_RETRY_DELAY_MS}ms...`);
+            await wait(DB_RETRY_DELAY_MS);
+        }
+    }
+};
+
 const startServer = async () => {
     try {
-        await connectDB();
+        await connectDBWithRetry();
         startTransactionCleanupJob();
         const port = process.env.PORT || 5000;
 
@@ -146,5 +173,27 @@ const startServer = async () => {
 if (require.main === module) {
     startServer();
 }
+
+process.on('unhandledRejection', (reason) => {
+    console.error('[Process] Unhandled Rejection:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+    console.error('[Process] Uncaught Exception:', error);
+});
+
+process.on('SIGINT', () => {
+    console.log('[Process] Received SIGINT. Shutting down backend...');
+    process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+    console.log('[Process] Received SIGTERM. Shutting down backend...');
+    process.exit(0);
+});
+
+process.on('exit', (code) => {
+    console.log(`[Process] Backend exited with code ${code}`);
+});
 
 module.exports = app;
