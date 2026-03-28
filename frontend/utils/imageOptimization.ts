@@ -17,27 +17,36 @@ export const optimizeCloudinaryUrl = (
 ): string => {
   if (!url) return '';
   if (typeof url !== 'string') return '';
-  
+
   // Return non-Cloudinary URLs as-is
   if (!url.includes('cloudinary.com')) return url;
-  
+
   try {
     const urlObj = new URL(url);
-    // Add optimization parameters only if not already present
-    if (!urlObj.searchParams.has('w')) {
-      urlObj.searchParams.set('w', width.toString());
-    }
-    if (!urlObj.searchParams.has('q')) {
-      urlObj.searchParams.set('q', quality);
-    }
-    if (!urlObj.searchParams.has('f')) {
-      urlObj.searchParams.set('f', 'auto'); // Auto format (webp for modern browsers)
-    }
+
+    const uploadToken = '/upload/';
+    const pathname = urlObj.pathname || '';
+    const uploadIndex = pathname.indexOf(uploadToken);
+
+    if (uploadIndex < 0) return url;
+
+    const safeWidth = Math.max(120, Math.round(width));
+    const transform = `f_auto,q_${quality},w_${safeWidth},c_limit,dpr_auto`;
+
+    const beforeUpload = pathname.slice(0, uploadIndex + uploadToken.length);
+    const afterUpload = pathname.slice(uploadIndex + uploadToken.length);
+
+    // Keep existing transformations (if any), and prepend optimization transform.
+    urlObj.pathname = `${beforeUpload}${transform}/${afterUpload}`;
     return urlObj.toString();
   } catch {
-    // Fallback for malformed URLs
-    const separator = url.includes('?') ? '&' : '?';
-    return `${url}${separator}w=${width}&q=${quality}&f=auto`;
+    // Fallback for malformed URLs or unexpected format
+    if (url.includes('/upload/')) {
+      const safeWidth = Math.max(120, Math.round(width));
+      const transform = `f_auto,q_${quality},w_${safeWidth},c_limit,dpr_auto`;
+      return url.replace('/upload/', `/upload/${transform}/`);
+    }
+    return url;
   }
 };
 

@@ -127,7 +127,7 @@ export default function PropertyListingsMap({
           <div style="width:220px;font-family:system-ui, -apple-system, Segoe UI, sans-serif;">
             ${
               optimizedImage
-                ? `<img src="${optimizedImage}" alt="${safeTitle}" style="width:100%;height:110px;object-fit:cover;border-radius:8px;margin-bottom:8px;loading:lazy;decoding:async;" />`
+                ? `<img src="${optimizedImage}" alt="${safeTitle}" loading="lazy" decoding="async" style="width:100%;height:110px;object-fit:cover;border-radius:8px;margin-bottom:8px;" />`
                 : ""
             }
             <div style="font-size:14px;font-weight:700;color:#1f2937;line-height:1.35;margin-bottom:4px;">${safeTitle}</div>
