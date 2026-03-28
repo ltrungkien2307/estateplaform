@@ -42,6 +42,18 @@ const clipText = (value: string | undefined, max = 50) => {
 
 const URL_PATTERN = /(https?:\/\/[^\s]+)/g;
 const isHttpUrl = (value: string) => /^https?:\/\/\S+$/i.test(value);
+const SUBSCRIPTION_SYSTEM_NAMES = new Set(["subcription", "subscription", "subscripton"]);
+
+const isSubscriptionSystemConversation = (
+  conversation?: ConversationSummary | null
+) => {
+  if (!conversation || conversation.conversationId === AI_CONVERSATION_ID) return false;
+  const participant = conversation.participant;
+  if (!participant) return false;
+  if (participant.role !== "admin") return false;
+  const normalizedName = String(participant.name || "").trim().toLowerCase();
+  return SUBSCRIPTION_SYSTEM_NAMES.has(normalizedName);
+};
 
 export default function MessagingWidget() {
   const {
@@ -129,10 +141,19 @@ export default function MessagingWidget() {
   );
 
   const isAiConversation = activeConversationId === AI_CONVERSATION_ID;
+  const isSubscriptionOneWayConversation = useMemo(
+    () => isSubscriptionSystemConversation(activeConversation),
+    [activeConversation]
+  );
   const isSubmitting = sendingMessage || chatbotThinking;
 
   const handleSend = async (event: FormEvent) => {
     event.preventDefault();
+    if (isSubscriptionOneWayConversation) {
+      setLocalError("Đây là kênh thông báo 1 chiều từ Subcription. Bạn không thể nhắn ngược lại.");
+      return;
+    }
+
     const rawDraft = draft;
     const cleaned = draft.trim();
     if (!cleaned && !selectedImage) return;
@@ -162,7 +183,7 @@ export default function MessagingWidget() {
   };
 
   const onPickImage = () => {
-    if (isAiConversation) return;
+    if (isAiConversation || isSubscriptionOneWayConversation) return;
     fileRef.current?.click();
   };
 
@@ -246,6 +267,7 @@ export default function MessagingWidget() {
                 ) : (
                   allConversations.map((conversation) => {
                     const isActive = conversation.conversationId === activeConversationId;
+                    const isSystemOneWay = isSubscriptionSystemConversation(conversation);
                     const preview =
                       conversation.lastMessage.messageType === "image"
                         ? "Đã gửi hình ảnh"
@@ -287,12 +309,19 @@ export default function MessagingWidget() {
 
                           <div className="min-w-0 flex-1">
                             <div className="mb-1 flex items-center justify-between gap-2">
-                              <p
-                                className="truncate text-sm font-semibold"
-                                style={{ color: "var(--e-charcoal)" }}
-                              >
-                                {conversation.participant?.name || "Hội thoại"}
-                              </p>
+                              <div className="min-w-0">
+                                <p
+                                  className="truncate text-sm font-semibold"
+                                  style={{ color: "var(--e-charcoal)" }}
+                                >
+                                  {conversation.participant?.name || "Hội thoại"}
+                                </p>
+                                {isSystemOneWay ? (
+                                  <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-700">
+                                    Thông báo hệ thống · 1 chiều
+                                  </p>
+                                ) : null}
+                              </div>
                               <span className="shrink-0 text-[11px]" style={{ color: "var(--e-light-muted)" }}>
                                 {formatTime(conversation.updatedAt)}
                               </span>
@@ -325,7 +354,11 @@ export default function MessagingWidget() {
                     className="text-[10px] font-bold uppercase tracking-[0.16em]"
                     style={{ color: "var(--e-gold)" }}
                   >
-                    {isAiConversation ? "AI Assistant" : "Direct Chat"}
+                    {isAiConversation
+                      ? "AI Assistant"
+                      : isSubscriptionOneWayConversation
+                        ? "System Notification"
+                        : "Direct Chat"}
                   </p>
                   <p className="text-sm font-semibold" style={{ color: "var(--e-charcoal)" }}>
                     {activeConversation.participant?.name || "Tin nhắn"}
@@ -448,6 +481,12 @@ export default function MessagingWidget() {
                   </div>
                 ) : null}
 
+                {isSubscriptionOneWayConversation ? (
+                  <div className="mb-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                    Kênh thông báo 1 chiều từ Subcription. Bạn chỉ có thể nhận thông báo, không thể phản hồi.
+                  </div>
+                ) : null}
+
                 {selectedImage ? (
                   <div className="mb-2 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
                     <p className="truncate">Đính kèm: {selectedImage.name}</p>
@@ -479,7 +518,7 @@ export default function MessagingWidget() {
                   <button
                     type="button"
                     onClick={onPickImage}
-                    disabled={isAiConversation}
+                    disabled={isAiConversation || isSubscriptionOneWayConversation}
                     className="inline-flex h-10 w-10 items-center justify-center rounded-lg border bg-white/80 text-slate-600 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                     style={{ borderColor: "rgba(154,124,69,0.18)" }}
                     aria-label="Đính kèm hình ảnh"
@@ -491,19 +530,30 @@ export default function MessagingWidget() {
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
                     rows={1}
+                    disabled={isSubscriptionOneWayConversation}
                     placeholder={
-                      isAiConversation ? "Đặt câu hỏi cho AI..." : "Nhập tin nhắn..."
+                      isAiConversation
+                        ? "Đặt câu hỏi cho AI..."
+                        : isSubscriptionOneWayConversation
+                          ? "Kênh này chỉ nhận thông báo từ hệ thống."
+                          : "Nhập tin nhắn..."
                     }
                     className="min-h-10 flex-1 resize-none rounded-lg border px-3 py-2 text-sm outline-none transition-all focus:border-amber-400"
                     style={{
                       borderColor: "rgba(154,124,69,0.22)",
-                      background: "rgba(255,255,255,0.92)",
+                      background: isSubscriptionOneWayConversation
+                        ? "rgba(245,245,244,0.95)"
+                        : "rgba(255,255,255,0.92)",
                     }}
                   />
 
                   <button
                     type="submit"
-                    disabled={isSubmitting || (!draft.trim() && !selectedImage)}
+                    disabled={
+                      isSubmitting ||
+                      isSubscriptionOneWayConversation ||
+                      (!draft.trim() && !selectedImage)
+                    }
                     className="inline-flex h-10 w-10 items-center justify-center rounded-lg border text-white transition-all disabled:cursor-not-allowed disabled:opacity-50"
                     style={{
                       borderColor: "rgba(37,45,54,0.35)",

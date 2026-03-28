@@ -105,14 +105,22 @@ const runSubscriptionReminder = async () => {
   try {
     const bot = await ensureSubscriptionBotAdmin();
     const now = new Date();
-    const startOfToday = new Date(now);
-    startOfToday.setHours(0, 0, 0, 0);
-    const targetStart = new Date(startOfToday.getTime() + REMINDER_DAYS * DAY_IN_MS);
-    const targetEnd = new Date(targetStart.getTime() + DAY_IN_MS);
+    const reminderWindowEnd = new Date(now.getTime() + REMINDER_DAYS * DAY_IN_MS);
+
+    // Reset reminder flag for active subscriptions that are no longer in reminder window
+    // (for example after a renewal that extends expiresAt far into the future).
+    await Subscription.updateMany(
+      {
+        status: 'active',
+        expiresAt: { $gt: reminderWindowEnd },
+        reminder7DaysSentAt: { $ne: null },
+      },
+      { $set: { reminder7DaysSentAt: null } }
+    );
 
     const subscriptions = await Subscription.find({
       status: 'active',
-      expiresAt: { $gte: targetStart, $lt: targetEnd },
+      expiresAt: { $gt: now, $lte: reminderWindowEnd },
       $or: [
         { reminder7DaysSentAt: { $exists: false } },
         { reminder7DaysSentAt: null },
@@ -139,9 +147,14 @@ const runSubscriptionReminder = async () => {
         continue;
       }
 
+      const expiresAt = subscription.expiresAt ? new Date(subscription.expiresAt) : null;
+      const remainingDays = expiresAt
+        ? Math.max(1, Math.ceil((expiresAt.getTime() - now.getTime()) / DAY_IN_MS))
+        : REMINDER_DAYS;
+
       const conversationId = getConversationId(bot._id, receiver._id);
       const content =
-        `Gói ${subscription.planType} của bạn sẽ hết hạn sau ${REMINDER_DAYS} ngày ` +
+        `Gói ${subscription.planType} của bạn sẽ hết hạn sau ${remainingDays} ngày ` +
         `(ngày hết hạn: ${formatExpiryDate(subscription.expiresAt)}). ` +
         'Vui lòng gia hạn sớm để tránh gián đoạn quyền đăng tin và các tính năng nâng cao.';
 

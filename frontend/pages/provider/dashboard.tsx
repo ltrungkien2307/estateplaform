@@ -8,7 +8,7 @@ import {
   Plus, DollarSign, Ruler, BedDouble,
   CheckCircle, Clock, XCircle, LoaderCircle,
   AlertTriangle, CheckCircle2, FileUp, IdCard, ShieldCheck, UploadCloud, X,
-  Eye, MousePointerClick, Calendar,
+  Eye, MousePointerClick, Calendar, LogOut,
   LayoutDashboard, Building2, Layers, Settings,
   Check, Sparkles, Zap, Crown, ArrowRight, MapPin, Phone, FileText, Landmark, CreditCard, Search,
 } from "lucide-react";
@@ -1713,7 +1713,7 @@ const NAV_ITEMS: { view: View; label: string; icon: React.ReactNode }[] = [
 ═══════════════════════════════════════════════════════════ */
 export default function ProviderDashboard() {
   const router = useRouter();
-  const { user, isAuthLoading } = useAuth();
+  const { user, isAuthLoading, logout } = useAuth();
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<View>("dashboard");
@@ -1725,6 +1725,11 @@ export default function ProviderDashboard() {
     recentSold: [],
   });
   const [subscriptionStatus, setSubscriptionStatus] = useState<CurrentSubscriptionStatus | null>(null);
+
+  const handleSidebarLogout = useCallback(() => {
+    logout();
+    void router.push("/");
+  }, [logout, router]);
 
   const effectivePlanForQuota = useMemo<SubscriptionPlan>(() => {
     const rawPlan = (subscriptionStatus?.planType as SubscriptionPlan | undefined) ?? getUserPlan(user);
@@ -2009,6 +2014,29 @@ export default function ProviderDashboard() {
                 <Settings size={14} style={{ flexShrink: 0 }} />
                 <span style={{ fontSize: "0.78rem", fontWeight: 500 }}>Cài Đặt</span>
               </a>
+
+              <button
+                type="button"
+                onClick={handleSidebarLogout}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 14,
+                  padding: "11px 18px",
+                  borderRadius: 12,
+                  border: "1px solid rgba(239,68,68,0.22)",
+                  background: "rgba(239,68,68,0.06)",
+                  color: "rgba(255, 178, 178, 0.92)",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  transition: "all 0.2s",
+                  fontFamily: "var(--e-sans)",
+                }}
+              >
+                <LogOut size={14} style={{ flexShrink: 0 }} />
+                <span style={{ fontSize: "0.78rem", fontWeight: 600 }}>Đăng xuất</span>
+              </button>
             </nav>
 
             {/* User footer */}

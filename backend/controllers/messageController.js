@@ -6,6 +6,21 @@ const { uploadToCloudinary } = require('../utils/cloudinary');
 const { emitToUser } = require('../services/socketService');
 
 const MAX_LIMIT = 100;
+const SUBSCRIPTION_BOT_EMAIL = String(
+  process.env.SUBSCRIPTION_BOT_EMAIL || 'subscription@estatemanager.local'
+)
+  .trim()
+  .toLowerCase();
+const SUBSCRIPTION_BOT_NAMES = new Set(
+  [
+    process.env.SUBSCRIPTION_BOT_NAME || 'Subcription',
+    'Subcription',
+    'Subscription',
+    'Subscripton',
+  ]
+    .map((value) => String(value || '').trim().toLowerCase())
+    .filter(Boolean)
+);
 
 const sendMessageSchema = Joi.object({
   receiverId: Joi.string().trim().required(),
@@ -70,6 +85,20 @@ const isConversationAllowed = (sender, receiver) => {
   if (sender.role === 'provider') {
     return receiver.role === 'provider' || receiver.role === 'user';
   }
+
+  return false;
+};
+
+const isSubscriptionSystemAccount = (user) => {
+  if (!user) return false;
+  const role = String(user.role || '').toLowerCase();
+  if (role !== 'admin') return false;
+
+  const email = String(user.email || '').trim().toLowerCase();
+  if (email && email === SUBSCRIPTION_BOT_EMAIL) return true;
+
+  const name = String(user.name || '').trim().toLowerCase();
+  if (name && SUBSCRIPTION_BOT_NAMES.has(name)) return true;
 
   return false;
 };
@@ -181,13 +210,21 @@ exports.sendMessage = async (req, res, next) => {
       });
     }
 
-    const sender = await User.findById(req.user.id).select('_id role name avatar');
-    const receiver = await User.findById(value.receiverId).select('_id role name avatar');
+    const sender = await User.findById(req.user.id).select('_id role name avatar email');
+    const receiver = await User.findById(value.receiverId).select('_id role name avatar email');
 
     if (!sender || !receiver) {
       return res.status(404).json({
         status: 'error',
         message: 'Sender or receiver not found',
+      });
+    }
+
+    if (isSubscriptionSystemAccount(receiver)) {
+      return res.status(403).json({
+        status: 'error',
+        message:
+          'Đây là kênh thông báo 1 chiều từ Subcription. Bạn không thể nhắn ngược lại.',
       });
     }
 

@@ -1,0 +1,5 @@
+
+> estatemanager-backend@1.0.0 dev
+> node server.js
+
+[dotenv@17.2.3] injecting env (28) from .env -- tip: ⚙️  enable debug logging with { debug: true }

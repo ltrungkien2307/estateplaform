@@ -390,7 +390,7 @@ export default function HomePage({
 
         .ls-split {
             display: grid;
-            grid-template-columns: minmax(0, 1.2fr) minmax(360px, 0.8fr);
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 1rem;
             align-items: stretch;
         }

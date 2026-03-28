@@ -1,5 +1,6 @@
 const express = require('express');
 const http = require('http');
+const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
@@ -17,6 +18,8 @@ const { initSocketServer } = require('./services/socketService');
 dotenv.config({ override: process.env.NODE_ENV !== 'production' });
 
 const app = express();
+let httpServer = null;
+let isShuttingDown = false;
 
 // ─── Security Middleware ─────────────────────────────────────
 app.use(helmet());
@@ -26,9 +29,36 @@ app.use(cors({
 }));
 
 // ─── Rate Limiting ───────────────────────────────────────────
+const isDevEnv = process.env.NODE_ENV !== 'production';
+const API_RATE_LIMIT_WINDOW_MS = Number(process.env.API_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000);
+const API_RATE_LIMIT_MAX = Number(process.env.API_RATE_LIMIT_MAX || (isDevEnv ? 2000 : 300));
+
+const isLocalIp = (ip = '') => {
+    const normalized = String(ip || '').toLowerCase();
+    return (
+        normalized === '::1' ||
+        normalized === '127.0.0.1' ||
+        normalized === '::ffff:127.0.0.1'
+    );
+};
+
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100 // limit each IP to 100 requests per windowMs
+    windowMs: API_RATE_LIMIT_WINDOW_MS,
+    max: API_RATE_LIMIT_MAX,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    skip: (req) => {
+        if (req.path === '/health') return true;
+        if (isDevEnv) {
+            const ip = req.ip || req.socket?.remoteAddress || '';
+            return isLocalIp(ip);
+        }
+        return false;
+    },
+    message: {
+        status: 'error',
+        message: 'Too many requests. Please try again later.',
+    },
 });
 app.use('/api', limiter);
 
@@ -173,12 +203,17 @@ const startServer = async () => {
         startSubscriptionReminderJob();
         const port = process.env.PORT || 5000;
 
-        const httpServer = http.createServer(app);
+        httpServer = http.createServer(app);
         initSocketServer(httpServer);
+        httpServer.on('error', (error) => {
+            console.error('[Server] HTTP server error:', error);
+            process.exit(1);
+        });
 
         httpServer.listen(port, () => {
             console.log(`EstateManager API running on port ${port}`);
             console.log(`API Docs: http://localhost:${port}/api-docs`);
+            console.log(`[RateLimit] windowMs=${API_RATE_LIMIT_WINDOW_MS}, max=${API_RATE_LIMIT_MAX}, devBypassLocal=${isDevEnv}`);
         });
     } catch (err) {
         console.error(err.message || err);
@@ -190,22 +225,63 @@ if (require.main === module) {
     startServer();
 }
 
+const gracefulShutdown = async (signal) => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+
+    const forceTimeoutMs = Number(process.env.SHUTDOWN_FORCE_TIMEOUT_MS || 8000);
+    const forceTimer = setTimeout(() => {
+        console.error(`[Process] Shutdown timeout reached after ${forceTimeoutMs}ms. Force exiting.`);
+        process.exit(1);
+    }, forceTimeoutMs);
+    if (typeof forceTimer.unref === 'function') forceTimer.unref();
+
+    try {
+        console.log(`[Process] Received ${signal}. Shutting down backend... (pid=${process.pid}, ppid=${process.ppid})`);
+
+        if (httpServer) {
+            await new Promise((resolve) => httpServer.close(resolve));
+        }
+
+        if (mongoose.connection.readyState !== 0) {
+            await mongoose.connection.close(false);
+            console.log('[Process] MongoDB connection closed.');
+        }
+
+        clearTimeout(forceTimer);
+        process.exit(0);
+    } catch (error) {
+        console.error('[Process] Graceful shutdown failed:', error);
+        clearTimeout(forceTimer);
+        process.exit(1);
+    }
+};
+
 process.on('unhandledRejection', (reason) => {
     console.error('[Process] Unhandled Rejection:', reason);
+    void gracefulShutdown('UNHANDLED_REJECTION');
 });
 
 process.on('uncaughtException', (error) => {
     console.error('[Process] Uncaught Exception:', error);
+    void gracefulShutdown('UNCAUGHT_EXCEPTION');
 });
 
 process.on('SIGINT', () => {
-    console.log('[Process] Received SIGINT. Shutting down backend...');
-    process.exit(0);
+    void gracefulShutdown('SIGINT');
 });
 
 process.on('SIGTERM', () => {
-    console.log('[Process] Received SIGTERM. Shutting down backend...');
-    process.exit(0);
+    void gracefulShutdown('SIGTERM');
+});
+
+process.on('SIGHUP', () => {
+    void gracefulShutdown('SIGHUP');
+});
+
+process.on('disconnect', () => {
+    console.warn('[Process] Parent process disconnected.');
+    void gracefulShutdown('DISCONNECT');
 });
 
 process.on('exit', (code) => {
