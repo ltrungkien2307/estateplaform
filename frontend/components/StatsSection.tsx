@@ -1,14 +1,35 @@
-import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 export default function StatsSection() {
     const { t } = useTranslation();
-    const stats = useMemo(() => ([
-        { num: '2,400', sup: '+', label: t('home.stats.items.properties.label'), desc: t('home.stats.items.properties.desc') },
-        { num: '12,000', sup: '+', label: t('home.stats.items.customers.label'), desc: t('home.stats.items.customers.desc') },
-        { num: '63', sup: '', label: t('home.stats.items.provinces.label'), desc: t('home.stats.items.provinces.desc') },
-        { num: '98', sup: '%', label: t('home.stats.items.verified.label'), desc: t('home.stats.items.verified.desc') },
-    ]), [t]);
+    const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback });
+
+    const stats = [
+        {
+            num: '2,400',
+            sup: '+',
+            label: tr('home.stats.items.properties.label', 'Bất Động Sản'),
+            desc: tr('home.stats.items.properties.desc', 'Đang rao bán · cập nhật mỗi ngày'),
+        },
+        {
+            num: '12,000',
+            sup: '+',
+            label: tr('home.stats.items.customers.label', 'Khách Hàng Hài Lòng'),
+            desc: tr('home.stats.items.customers.desc', 'Trên toàn quốc'),
+        },
+        {
+            num: '63',
+            sup: '',
+            label: tr('home.stats.items.provinces.label', 'Tỉnh Thành Phủ Sóng'),
+            desc: tr('home.stats.items.provinces.desc', 'Từ Bắc vào Nam'),
+        },
+        {
+            num: '98',
+            sup: '%',
+            label: tr('home.stats.items.verified.label', 'Tỷ Lệ Xác Minh'),
+            desc: tr('home.stats.items.verified.desc', 'Pháp lý minh bạch'),
+        },
+    ];
 
     return (
         <section style={{ position: 'relative', overflow: 'hidden' }} id="about">
@@ -218,9 +239,9 @@ export default function StatsSection() {
                 <div className="st-topbar">
                     <span className="st-topbar-eyebrow">
                         <span className="st-topbar-line" />
-                        {t('home.stats.topbarEyebrow')}
+                        {tr('home.stats.topbarEyebrow', 'Con Số Thực Tế')}
                     </span>
-                    <span className="st-topbar-quote">"{t('home.stats.topbarQuote')}"</span>
+                    <span className="st-topbar-quote">{`"${tr('home.stats.topbarQuote', 'Minh bạch — Tin cậy — Bền vững')}"`}</span>
                 </div>
 
                 {/* ── Stats grid ── */}
