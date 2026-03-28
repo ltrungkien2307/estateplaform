@@ -10,6 +10,7 @@ const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./config/swagger');
 const connectDB = require('./config/db');
 const { startTransactionCleanupJob } = require('./jobs/transactionCleanupJob');
+const { startSubscriptionReminderJob } = require('./jobs/subscriptionReminderJob');
 const { initSocketServer } = require('./services/socketService');
 
 // Load env vars
@@ -116,6 +117,20 @@ app.use((err, req, res, next) => {
         });
     }
 
+    // Multer upload errors
+    if (err.name === 'MulterError') {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+            return res.status(413).json({
+                status: 'error',
+                message: 'File quá lớn. Vui lòng chọn file nhỏ hơn hoặc bằng 20MB.'
+            });
+        }
+        return res.status(400).json({
+            status: 'error',
+            message: err.message || 'Upload file không hợp lệ.'
+        });
+    }
+
     // Default error
     res.status(err.statusCode || 500).json({
         status: 'error',
@@ -155,6 +170,7 @@ const startServer = async () => {
     try {
         await connectDBWithRetry();
         startTransactionCleanupJob();
+        startSubscriptionReminderJob();
         const port = process.env.PORT || 5000;
 
         const httpServer = http.createServer(app);

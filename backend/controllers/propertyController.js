@@ -1,5 +1,6 @@
 const Property = require('../models/Property');
 const User = require('../models/User');
+const ProviderSalesStats = require('../models/ProviderSalesStats');
 const APIFeatures = require('../utils/apiFeatures');
 const Joi = require('joi');
 const { uploadToCloudinary } = require('../utils/cloudinary');
@@ -12,6 +13,20 @@ const markSoldSchema = Joi.object({
 const propertyVisibilitySchema = Joi.object({
   hidden: Joi.boolean().required(),
 }).options({ stripUnknown: true });
+
+const toObjectIdStringSet = (values = []) => {
+  return new Set(
+    (values || [])
+      .map((value) => {
+        try {
+          return String(value);
+        } catch (error) {
+          return '';
+        }
+      })
+      .filter(Boolean)
+  );
+};
 
 const normalizeSaleFlags = (payload = {}) => {
   if (!payload || typeof payload !== 'object') return;
@@ -406,6 +421,14 @@ exports.markPropertyAsSold = async (req, res, next) => {
       });
     }
 
+    const canMarkSold = ['approved', 'hidden'].includes(property.status);
+    if (!canMarkSold && property.status !== 'sold' && !property.isSold) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Chỉ bất động sản đã được duyệt mới có thể đánh dấu đã bán',
+      });
+    }
+
     if (property.status !== 'sold' || !property.isSold) {
       property.status = 'sold';
       property.isSold = true;
@@ -413,6 +436,35 @@ exports.markPropertyAsSold = async (req, res, next) => {
       property.rejectionReason = '';
       await property.save({ validateBeforeSave: false });
     }
+
+    await ProviderSalesStats.findOneAndUpdate(
+      { providerId: property.ownerId },
+      {
+        $setOnInsert: {
+          providerId: property.ownerId,
+          totalSoldProperties: 0,
+          totalSoldValue: 0,
+          latestSoldAt: null,
+          soldPropertyIds: [],
+        },
+      },
+      { upsert: true, new: true }
+    );
+
+    await ProviderSalesStats.updateOne(
+      {
+        providerId: property.ownerId,
+        soldPropertyIds: { $ne: property._id },
+      },
+      {
+        $addToSet: { soldPropertyIds: property._id },
+        $inc: {
+          totalSoldProperties: 1,
+          totalSoldValue: Number(property.price || 0),
+        },
+        $max: { latestSoldAt: property.soldAt || new Date() },
+      }
+    );
 
     res.status(200).json({
       status: 'success',
@@ -488,37 +540,64 @@ exports.setPropertyVisibility = async (req, res, next) => {
 exports.getMySalesStats = async (req, res, next) => {
   try {
     const ownerId = req.user.id;
-    const soldQuery = {
+    const soldPropertyQuery = {
       ownerId,
       $or: [{ isSold: true }, { status: 'sold' }, { soldAt: { $ne: null } }],
     };
 
-    const [summaryRows, recentSold] = await Promise.all([
-      Property.aggregate([
-        { $match: soldQuery },
-        {
-          $group: {
-            _id: '$ownerId',
-            totalSoldProperties: { $sum: 1 },
-            totalSoldValue: { $sum: '$price' },
-            latestSoldAt: { $max: '$soldAt' },
-          },
-        },
-      ]),
-      Property.find(soldQuery)
+    const [salesStats, soldProperties] = await Promise.all([
+      ProviderSalesStats.findOne({ providerId: ownerId }),
+      Property.find(soldPropertyQuery)
         .sort({ soldAt: -1, updatedAt: -1 })
-        .limit(8)
         .select('_id title price soldAt status isSold address'),
     ]);
 
-    const summary = summaryRows[0] || {};
+    const statsDoc =
+      salesStats ||
+      (await ProviderSalesStats.create({
+        providerId: ownerId,
+        totalSoldProperties: 0,
+        totalSoldValue: 0,
+        latestSoldAt: null,
+        soldPropertyIds: [],
+      }));
+
+    const trackedPropertyIds = toObjectIdStringSet(statsDoc.soldPropertyIds || []);
+    const missingSoldProperties = soldProperties.filter(
+      (property) => !trackedPropertyIds.has(String(property._id))
+    );
+
+    if (missingSoldProperties.length > 0) {
+      const missingCount = missingSoldProperties.length;
+      const missingValue = missingSoldProperties.reduce(
+        (sum, property) => sum + Number(property.price || 0),
+        0
+      );
+      const missingLatestSoldAt = missingSoldProperties.reduce((latest, property) => {
+        const candidate = property.soldAt ? new Date(property.soldAt) : null;
+        if (!candidate || Number.isNaN(candidate.getTime())) return latest;
+        if (!latest) return candidate;
+        return candidate.getTime() > latest.getTime() ? candidate : latest;
+      }, statsDoc.latestSoldAt ? new Date(statsDoc.latestSoldAt) : null);
+
+      statsDoc.totalSoldProperties = Number(statsDoc.totalSoldProperties || 0) + missingCount;
+      statsDoc.totalSoldValue = Number(statsDoc.totalSoldValue || 0) + missingValue;
+      statsDoc.latestSoldAt = missingLatestSoldAt || statsDoc.latestSoldAt;
+      statsDoc.soldPropertyIds = [
+        ...(statsDoc.soldPropertyIds || []),
+        ...missingSoldProperties.map((property) => property._id),
+      ];
+      await statsDoc.save({ validateBeforeSave: false });
+    }
+
+    const recentSold = soldProperties.slice(0, 8);
 
     res.status(200).json({
       status: 'success',
       data: {
-        totalSoldProperties: Number(summary.totalSoldProperties || 0),
-        totalSoldValue: Number(summary.totalSoldValue || 0),
-        latestSoldAt: summary.latestSoldAt || null,
+        totalSoldProperties: Number(statsDoc.totalSoldProperties || 0),
+        totalSoldValue: Number(statsDoc.totalSoldValue || 0),
+        latestSoldAt: statsDoc.latestSoldAt || null,
         recentSold,
       },
     });

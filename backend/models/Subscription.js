@@ -55,6 +55,11 @@ const subscriptionSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    reminder7DaysSentAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
   },
   {
     timestamps: true,

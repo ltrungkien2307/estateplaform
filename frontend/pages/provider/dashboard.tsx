@@ -257,6 +257,20 @@ function getUserListingsCount(user: User | null | undefined): number {
   return (user as any).listingsCount ?? 0;
 }
 
+function getPlanLimit(plan: SubscriptionPlan): number {
+  const limits: Record<SubscriptionPlan, number> = {
+    Free: 3,
+    Pro: 20,
+    ProPlus: Number.POSITIVE_INFINITY,
+  };
+  return limits[plan] ?? 0;
+}
+
+function formatPlanLimit(limit: number): string {
+  if (!Number.isFinite(limit)) return "không giới hạn";
+  return `${limit}`;
+}
+
 function isSoldListing(property: Partial<Property> | null | undefined): boolean {
   return Boolean(property?.isSold || property?.status === "sold" || property?.soldAt);
 }
@@ -685,6 +699,7 @@ function PropertyCard({ property, onEdit, onDelete, onMarkSold, onToggleVisibili
 }) {
   const [hovered, setHovered] = useState(false);
   const canToggleVisibility = property.status === "approved" || property.status === "hidden";
+  const canMarkSold = !isSoldListing(property) && (property.status === "approved" || property.status === "hidden");
 
   return (
     <div style={{
@@ -772,8 +787,10 @@ function PropertyCard({ property, onEdit, onDelete, onMarkSold, onToggleVisibili
             <Eye size={12} /> Xem
           </Link>
           <ActionBtn variant="outline" onClick={onEdit}><Check size={12} /> Sửa</ActionBtn>
-          {!isSoldListing(property) ? (
+          {canMarkSold ? (
             <ActionBtn variant="dark" onClick={onMarkSold}><CheckCircle2 size={12} /> Đã Bán</ActionBtn>
+          ) : !isSoldListing(property) ? (
+            <ActionBtn variant="ghost" disabled><Clock size={12} /> Chưa Duyệt</ActionBtn>
           ) : (
             <ActionBtn variant="ghost" disabled><CheckCircle2 size={12} /> Đã Chốt</ActionBtn>
           )}
@@ -1709,19 +1726,83 @@ export default function ProviderDashboard() {
   });
   const [subscriptionStatus, setSubscriptionStatus] = useState<CurrentSubscriptionStatus | null>(null);
 
+  const effectivePlanForQuota = useMemo<SubscriptionPlan>(() => {
+    const rawPlan = (subscriptionStatus?.planType as SubscriptionPlan | undefined) ?? getUserPlan(user);
+    if (rawPlan === "Pro" || rawPlan === "ProPlus" || rawPlan === "Free") {
+      return rawPlan;
+    }
+    return "Free";
+  }, [subscriptionStatus?.planType, user]);
+
+  const listingsUsedForQuota = useMemo(
+    () => Math.max(properties.length, getUserListingsCount(user)),
+    [properties.length, user]
+  );
+
+  const listingLimitForQuota = useMemo(
+    () => getPlanLimit(effectivePlanForQuota),
+    [effectivePlanForQuota]
+  );
+
+  const isCreateBlockedByQuota = useMemo(
+    () => Number.isFinite(listingLimitForQuota) && listingsUsedForQuota >= listingLimitForQuota,
+    [listingLimitForQuota, listingsUsedForQuota]
+  );
+
+  const handleQuotaExceededRedirect = useCallback((source: "nav" | "route") => {
+    if (!isCreateBlockedByQuota) return;
+    const message = `Bạn đã đạt giới hạn ${formatPlanLimit(listingLimitForQuota)} tin đăng của gói ${effectivePlanForQuota}. Không thể đăng tin mới.`;
+    const goUpgrade = window.confirm(`${message}\n\nBạn có muốn nâng cấp gói ngay bây giờ không?`);
+
+    if (goUpgrade) {
+      setView("plans");
+      void router.replace(
+        { pathname: "/provider/dashboard", query: { view: "plans" } },
+        undefined,
+        { shallow: true }
+      );
+      return;
+    }
+
+    if (source === "route") {
+      setView("properties");
+      void router.replace(
+        { pathname: "/provider/dashboard", query: { view: "properties" } },
+        undefined,
+        { shallow: true }
+      );
+    }
+  }, [effectivePlanForQuota, isCreateBlockedByQuota, listingLimitForQuota, router]);
+
   useEffect(() => {
     const q = router.query.view as string | undefined;
-    if (q && ["dashboard", "properties", "plans", "create", "edit", "kyc"].includes(q))
-      setView(q as View);
-  }, [router.query.view]);
+    if (!q || !["dashboard", "properties", "plans", "create", "edit", "kyc"].includes(q)) return;
+
+    if (q === "create" && isCreateBlockedByQuota) {
+      handleQuotaExceededRedirect("route");
+      return;
+    }
+
+    setView(q as View);
+  }, [router.query.view, isCreateBlockedByQuota, handleQuotaExceededRedirect]);
 
   const handleSetView = useCallback((newView: View) => {
+    if (newView === "create" && isCreateBlockedByQuota) {
+      handleQuotaExceededRedirect("nav");
+      return;
+    }
     setView(newView);
     void router.replace(
       { pathname: "/provider/dashboard", query: newView === "dashboard" ? {} : { view: newView } },
       undefined, { shallow: true }
     );
-  }, [router]);
+  }, [router, isCreateBlockedByQuota, handleQuotaExceededRedirect]);
+
+  useEffect(() => {
+    if (loading || view !== "create") return;
+    if (!isCreateBlockedByQuota) return;
+    handleQuotaExceededRedirect("route");
+  }, [loading, view, isCreateBlockedByQuota, handleQuotaExceededRedirect]);
 
   const fetchProperties = useCallback(async () => {
     if (!user || user.role !== "provider") return;
@@ -1791,6 +1872,17 @@ export default function ProviderDashboard() {
   }, [fetchProperties, fetchDashboardMeta, handleSetView]);
 
   const handleMarkSold = useCallback(async (id: string) => {
+    const targetProperty = properties.find((item) => item._id === id);
+    const canMarkSold =
+      !!targetProperty &&
+      !isSoldListing(targetProperty) &&
+      (targetProperty.status === "approved" || targetProperty.status === "hidden");
+
+    if (!canMarkSold) {
+      alert("Chỉ bất động sản đã được duyệt mới có thể đánh dấu đã bán.");
+      return;
+    }
+
     const accepted = confirm("Xác nhận đánh dấu bất động sản này là đã bán?");
     if (!accepted) return;
     try {
@@ -1812,7 +1904,7 @@ export default function ProviderDashboard() {
     } catch (error: any) {
       alert(error?.message || "Không thể cập nhật trạng thái đã bán.");
     }
-  }, [fetchDashboardMeta]);
+  }, [fetchDashboardMeta, properties]);
 
   const handleToggleVisibility = useCallback(async (property: Property) => {
     const isHidden = property.status === "hidden";

@@ -2,6 +2,8 @@ const multer = require('multer');
 
 // Use memory storage for Cloudinary uploads (buffer-based)
 const storage = multer.memoryStorage();
+const MAX_UPLOAD_SIZE_MB = 20;
+const MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
 
 // File filter: only allow image files
 const fileFilter = (req, file, cb) => {
@@ -16,7 +18,7 @@ const upload = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB per file
+    fileSize: MAX_UPLOAD_SIZE_BYTES, // 20MB per file
   },
 });
 
