@@ -35,6 +35,7 @@ const TYPE_MAP = KNOWLEDGE_BASE.propertyTypeMap || {};
 const AMENITY_ALIASES = KNOWLEDGE_BASE.amenityAliasMap || {};
 const NAVIGATION_GUIDE_SECTIONS = KNOWLEDGE_BASE.navigationGuideSections || [];
 const ADVISORY_PLAYBOOK = KNOWLEDGE_BASE.advisoryPlaybook || {};
+const BOT_IDENTITY = KNOWLEDGE_BASE.botIdentity || {};
 
 const NAVIGATION_KEYWORDS = [
   'đăng nhập',
@@ -135,6 +136,36 @@ const LISTING_REQUEST_KEYWORDS = Array.isArray(ADVISORY_PLAYBOOK.listingRequestK
   && ADVISORY_PLAYBOOK.listingRequestKeywords.length > 0
   ? ADVISORY_PLAYBOOK.listingRequestKeywords
   : DEFAULT_LISTING_REQUEST_KEYWORDS;
+const DEFAULT_BOT_IDENTITY = {
+  name: 'Clara',
+  displayName: 'Clara',
+  gender: 'female',
+  pronouns: 'mình - bạn',
+  role: 'AI tư vấn mua bán bất động sản',
+  personalityTraits: ['ấm áp', 'điềm tĩnh', 'thực tế'],
+  conversationPrinciples: [
+    'Ưu tiên trả lời rõ ràng, tự nhiên, đúng trọng tâm nhu cầu mua bán.',
+    'Không lặp lại câu hỏi cũ khi người dùng đã cung cấp câu trả lời.',
+    'Kết thúc bằng một câu hỏi ngắn giúp người dùng ra quyết định tiếp theo.',
+  ],
+  doNot: ['Không xưng hô hành chính cứng nhắc', 'Không trả lời lan man'],
+};
+const BOT_PROFILE = {
+  ...DEFAULT_BOT_IDENTITY,
+  ...BOT_IDENTITY,
+  personalityTraits:
+    Array.isArray(BOT_IDENTITY.personalityTraits) && BOT_IDENTITY.personalityTraits.length > 0
+      ? BOT_IDENTITY.personalityTraits
+      : DEFAULT_BOT_IDENTITY.personalityTraits,
+  conversationPrinciples:
+    Array.isArray(BOT_IDENTITY.conversationPrinciples) && BOT_IDENTITY.conversationPrinciples.length > 0
+      ? BOT_IDENTITY.conversationPrinciples
+      : DEFAULT_BOT_IDENTITY.conversationPrinciples,
+  doNot:
+    Array.isArray(BOT_IDENTITY.doNot) && BOT_IDENTITY.doNot.length > 0
+      ? BOT_IDENTITY.doNot
+      : DEFAULT_BOT_IDENTITY.doNot,
+};
 
 const resolveGeminiApiKey = () =>
   String(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
@@ -315,6 +346,45 @@ const buildHistoryContext = (history = []) => {
   return sanitized
     .map((item) => `${item.role === 'user' ? 'User' : 'Assistant'}: ${item.content}`)
     .join('\n');
+};
+
+const buildBotIdentityContext = () => {
+  const name = String(BOT_PROFILE.displayName || BOT_PROFILE.name || 'Clara').trim() || 'Clara';
+  const gender = String(BOT_PROFILE.gender || 'female').trim() || 'female';
+  const pronouns = String(BOT_PROFILE.pronouns || 'mình - bạn').trim() || 'mình - bạn';
+  const role = String(BOT_PROFILE.role || 'AI tư vấn mua bán bất động sản').trim();
+  const personalityTraits = Array.isArray(BOT_PROFILE.personalityTraits)
+    ? BOT_PROFILE.personalityTraits.filter(Boolean).slice(0, 6)
+    : [];
+  const conversationPrinciples = Array.isArray(BOT_PROFILE.conversationPrinciples)
+    ? BOT_PROFILE.conversationPrinciples.filter(Boolean).slice(0, 8)
+    : [];
+  const doNot = Array.isArray(BOT_PROFILE.doNot)
+    ? BOT_PROFILE.doNot.filter(Boolean).slice(0, 6)
+    : [];
+
+  const lines = [
+    `- Tên bot: ${name}`,
+    `- Giới tính/persona: ${gender}`,
+    `- Vai trò: ${role}`,
+    `- Cách xưng hô ưu tiên: ${pronouns}`,
+  ];
+
+  if (personalityTraits.length > 0) {
+    lines.push(`- Tính cách cốt lõi: ${personalityTraits.join(', ')}`);
+  }
+
+  if (conversationPrinciples.length > 0) {
+    lines.push('- Nguyên tắc hội thoại:');
+    conversationPrinciples.forEach((item) => lines.push(`  ${item}`));
+  }
+
+  if (doNot.length > 0) {
+    lines.push(`- Không được làm: ${doNot.join(' | ')}`);
+  }
+
+  lines.push(`- Nếu người dùng hỏi "bạn tên gì", phải trả lời: "${name}".`);
+  return lines.join('\n');
 };
 
 const scoreKeywordMatches = (text, keywords = []) => {
@@ -1429,6 +1499,7 @@ const answerQuestion = async ({ question, history = [], memorySummary = '', pref
   });
 
   const advisorySkillPromptContext = String(skillContext.promptContext || '').trim() || 'N/A';
+  const botIdentityPromptContext = buildBotIdentityContext();
   const responseModeGuidance =
     responseMode === 'advisory'
       ? [
@@ -1494,6 +1565,9 @@ ${navigationContext}
 
 Advisory/legal skill context:
 ${advisorySkillPromptContext}
+
+Bot identity context:
+${botIdentityPromptContext}
 `.trim();
 
   let answerText = '';

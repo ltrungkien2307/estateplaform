@@ -18,8 +18,11 @@ This folder is the single source of truth for chatbot knowledge.
   Advisory keywords and consultation question templates.
 - `legal_checklist.md`:
   Legal keywords, risk keywords, and legal due-diligence checklist.
+- `human_conversation_style.md`:
+  Conversational tone rules to make chatbot responses more natural and human-like.
+- `bot_identity.md`:
+  Defines chatbot identity (name, persona, tone principles), currently set to Clara.
 
 ## Optional override
 
 Set `CHATBOT_KB_DIR` in backend `.env` to point to a custom folder with the same filenames.
-

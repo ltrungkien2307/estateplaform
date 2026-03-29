@@ -41,8 +41,11 @@ const clipText = (value: string | undefined, max = 50) => {
 };
 
 const URL_PATTERN = /(https?:\/\/[^\s]+)/g;
+const PROPERTY_DETAIL_URL_PATTERN = /^https?:\/\/\S+\/properties\/[a-f0-9]{24}(?:[/?#]\S*)?$/i;
 const isHttpUrl = (value: string) => /^https?:\/\/\S+$/i.test(value);
+const isPropertyDetailUrl = (value: string) => PROPERTY_DETAIL_URL_PATTERN.test(value);
 const SUBSCRIPTION_SYSTEM_NAMES = new Set(["subcription", "subscription", "subscripton"]);
+const CHATBOT_DISPLAY_NAME = "Clara";
 
 const isSubscriptionSystemConversation = (
   conversation?: ConversationSummary | null
@@ -107,7 +110,7 @@ export default function MessagingWidget() {
       conversationId: AI_CONVERSATION_ID,
       participant: {
         _id: AI_CONVERSATION_ID,
-        name: "EstateManager AI",
+        name: CHATBOT_DISPLAY_NAME,
         avatar: "",
         role: "provider",
       },
@@ -119,7 +122,7 @@ export default function MessagingWidget() {
         senderId: AI_CONVERSATION_ID,
         receiverId: "",
         messageType: "text",
-        content: lastAiMessage?.content || "Tư vấn nhanh về bất động sản",
+        content: lastAiMessage?.content || "Clara sẵn sàng tư vấn mua bán bất động sản",
         imageUrl: "",
         propertySnapshot: null,
         isRead: true,
@@ -224,19 +227,26 @@ export default function MessagingWidget() {
       </button>
 
       {isChatOpen ? (
-        <div
-          className="fixed bottom-24 left-4 right-4 z-[99990] overflow-hidden rounded-2xl border bg-white/90 shadow-2xl backdrop-blur-xl md:left-auto md:right-5 md:w-[860px] md:max-w-[calc(100vw-2.5rem)]"
-          style={{
-            borderColor: "rgba(154,124,69,0.18)",
-            boxShadow: "0 24px 55px rgba(17,28,20,0.2)",
-          }}
-        >
+        <>
+          <button
+            type="button"
+            aria-label="Đóng chatbox khi bấm ra ngoài"
+            onClick={closeChatbox}
+            className="fixed inset-0 z-[99988] bg-black/10 backdrop-blur-[1px]"
+          />
+          <div
+            className="fixed bottom-24 left-4 right-4 z-[99990] overflow-hidden rounded-2xl border bg-white/90 shadow-2xl backdrop-blur-xl md:left-auto md:right-5 md:w-[860px] md:max-w-[calc(100vw-2.5rem)]"
+            style={{
+              borderColor: "rgba(154,124,69,0.18)",
+              boxShadow: "0 24px 55px rgba(17,28,20,0.2)",
+            }}
+          >
           <div
             className="grid h-[72vh] max-h-[680px] min-h-[460px] min-w-0 grid-cols-1 overflow-hidden md:grid"
             style={{ gridTemplateColumns: "280px minmax(0, 1fr)" }}
           >
             <aside className="flex min-h-0 flex-col border-b bg-white/80 md:border-b-0 md:border-r" style={{ borderColor: "rgba(154,124,69,0.14)" }}>
-              <div className="flex shrink-0 items-center justify-between border-b px-4 py-3" style={{ borderColor: "rgba(154,124,69,0.14)" }}>
+              <div className="flex shrink-0 items-center border-b px-4 py-3" style={{ borderColor: "rgba(154,124,69,0.14)" }}>
                 <div>
                   <p
                     className="text-[10px] font-bold uppercase tracking-[0.18em]"
@@ -248,15 +258,6 @@ export default function MessagingWidget() {
                     Cuộc trò chuyện
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={closeChatbox}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border bg-white/80 text-slate-600 transition-colors hover:bg-white"
-                  style={{ borderColor: "rgba(154,124,69,0.18)" }}
-                  aria-label="Đóng chatbox"
-                >
-                  <X size={16} />
-                </button>
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto">
@@ -355,7 +356,7 @@ export default function MessagingWidget() {
                     style={{ color: "var(--e-gold)" }}
                   >
                     {isAiConversation
-                      ? "AI Assistant"
+                      ? "Clara Assistant"
                       : isSubscriptionOneWayConversation
                         ? "System Notification"
                         : "Direct Chat"}
@@ -364,6 +365,15 @@ export default function MessagingWidget() {
                     {activeConversation.participant?.name || "Tin nhắn"}
                   </p>
                 </div>
+                <button
+                  type="button"
+                  onClick={closeChatbox}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border bg-white/80 text-slate-600 transition-colors hover:bg-white"
+                  style={{ borderColor: "rgba(154,124,69,0.18)" }}
+                  aria-label="Đóng chatbox"
+                >
+                  <X size={16} />
+                </button>
               </header>
 
               <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
@@ -435,6 +445,7 @@ export default function MessagingWidget() {
                             <p className="whitespace-pre-wrap break-words text-sm leading-6">
                               {message.content.split(URL_PATTERN).map((segment, index) => {
                                 if (isHttpUrl(segment)) {
+                                  const isPropertyLink = isPropertyDetailUrl(segment);
                                   return (
                                     <a
                                       key={`${message._id}-segment-${index}`}
@@ -442,10 +453,16 @@ export default function MessagingWidget() {
                                       target="_blank"
                                       rel="noreferrer"
                                       className={`break-all underline decoration-1 underline-offset-2 ${
-                                        isMine ? "text-white" : "text-slate-700"
+                                        isPropertyLink
+                                          ? isMine
+                                            ? "text-sky-200 hover:text-sky-100 font-semibold"
+                                            : "text-blue-600 hover:text-blue-700 font-semibold"
+                                          : isMine
+                                            ? "text-white"
+                                            : "text-slate-700"
                                       }`}
                                     >
-                                      {segment}
+                                      {isPropertyLink ? "Nhấp vào để xem chi tiết" : segment}
                                     </a>
                                   );
                                 }
@@ -567,7 +584,8 @@ export default function MessagingWidget() {
               </div>
             </section>
           </div>
-        </div>
+          </div>
+        </>
       ) : null}
 
       {propertyPrefill ? (

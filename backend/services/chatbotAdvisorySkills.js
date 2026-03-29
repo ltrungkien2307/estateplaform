@@ -17,6 +17,7 @@ const containsAnyKeyword = (text = '', keywords = []) => {
 const KNOWLEDGE_BASE = loadChatbotKnowledge();
 const ADVISORY_PLAYBOOK = KNOWLEDGE_BASE.advisoryPlaybook || {};
 const LEGAL_RULES = KNOWLEDGE_BASE.legalChecklist || {};
+const HUMAN_CONVERSATION_STYLE = KNOWLEDGE_BASE.humanConversationStyle || {};
 
 const DEFAULT_LEGAL_KEYWORDS = [
   'phap ly',
@@ -77,6 +78,22 @@ const DEFAULT_LEGAL_CHECKLIST = [
 ];
 const DEFAULT_LEGAL_DISCLAIMER =
   'Lưu ý: nội dung này mang tính hỗ trợ tham khảo, không thay thế tư vấn của luật sư/công chứng viên.';
+const DEFAULT_HUMAN_TONE_RULES = [
+  'Mở đầu ngắn gọn để xác nhận đã hiểu nhu cầu của người dùng.',
+  'Dùng giọng tư vấn tự nhiên kiểu "mình - bạn", hạn chế văn phong hành chính.',
+  'Trả lời rõ ý, ngắn gọn, tránh lặp lại câu hỏi đã được người dùng trả lời.',
+  'Kết thúc bằng 1 câu hỏi tiếp theo có giá trị để hỗ trợ ra quyết định.',
+];
+const DEFAULT_HUMAN_PHRASES_TO_AVOID = [
+  'Kính gửi quý khách',
+  'Xin vui lòng cho biết',
+  'Theo dữ liệu hiện có của hệ thống',
+];
+const DEFAULT_HUMAN_CONNECTORS = [
+  'Để mình chốt nhanh:',
+  'Mình gợi ý ngắn gọn thế này:',
+  'Nếu bạn muốn, mình phân tích sâu thêm phần này.',
+];
 
 const LEGAL_KEYWORDS = Array.isArray(LEGAL_RULES.legalKeywords) && LEGAL_RULES.legalKeywords.length > 0
   ? LEGAL_RULES.legalKeywords
@@ -95,6 +112,20 @@ const LEGAL_CHECKLIST_LINES =
     ? LEGAL_RULES.checklist
     : DEFAULT_LEGAL_CHECKLIST;
 const LEGAL_DISCLAIMER = String(LEGAL_RULES.disclaimer || '').trim() || DEFAULT_LEGAL_DISCLAIMER;
+const HUMAN_TONE_RULES =
+  Array.isArray(HUMAN_CONVERSATION_STYLE.toneRules) && HUMAN_CONVERSATION_STYLE.toneRules.length > 0
+    ? HUMAN_CONVERSATION_STYLE.toneRules
+    : DEFAULT_HUMAN_TONE_RULES;
+const HUMAN_PHRASES_TO_AVOID =
+  Array.isArray(HUMAN_CONVERSATION_STYLE.phrasesToAvoid) &&
+  HUMAN_CONVERSATION_STYLE.phrasesToAvoid.length > 0
+    ? HUMAN_CONVERSATION_STYLE.phrasesToAvoid
+    : DEFAULT_HUMAN_PHRASES_TO_AVOID;
+const HUMAN_CONNECTORS =
+  Array.isArray(HUMAN_CONVERSATION_STYLE.humanConnectors) &&
+  HUMAN_CONVERSATION_STYLE.humanConnectors.length > 0
+    ? HUMAN_CONVERSATION_STYLE.humanConnectors
+    : DEFAULT_HUMAN_CONNECTORS;
 
 const CONSULTING_QUESTION_TEMPLATES = {
   unknown:
@@ -307,6 +338,18 @@ const buildSkillContext = ({
   const advisoryOverlay = [];
   const promptContext = [];
   const appliedSkills = [];
+
+  appliedSkills.push('humanized_conversation');
+  promptContext.push('Skill giao tiếp tự nhiên đang bật (humanized_conversation):');
+  HUMAN_TONE_RULES.slice(0, 6).forEach((rule) => {
+    promptContext.push(`- ${rule}`);
+  });
+  if (HUMAN_PHRASES_TO_AVOID.length > 0) {
+    promptContext.push(`- Cụm từ nên tránh: ${HUMAN_PHRASES_TO_AVOID.slice(0, 4).join(' | ')}`);
+  }
+  if (HUMAN_CONNECTORS.length > 0) {
+    promptContext.push(`- Cụm chuyển ý gợi ý: ${HUMAN_CONNECTORS.slice(0, 3).join(' | ')}`);
+  }
 
   if (consultingRequested) {
     appliedSkills.push('advisory_consulting');

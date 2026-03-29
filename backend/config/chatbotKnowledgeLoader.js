@@ -5,39 +5,6 @@ const ROOT_DIR = path.resolve(__dirname, '..');
 const LOCAL_CHATBOT_KNOWLEDGE_DIR = path.join(ROOT_DIR, 'knowledge', 'chatbot');
 const EXTERNAL_KNOWLEDGE_DIR = process.env.CHATBOT_KB_DIR || '';
 
-const DEFAULT_PROPERTY_TYPE_MAP = {
-  apartment: 'apartment',
-  'căn hộ': 'apartment',
-  condo: 'apartment',
-  house: 'house',
-  'nhà phố': 'house',
-  villa: 'villa',
-  'biệt thự': 'villa',
-  studio: 'studio',
-  office: 'office',
-  'văn phòng': 'office',
-};
-
-const DEFAULT_AMENITY_ALIAS_MAP = {
-  'hồ bơi': 'Hồ bơi',
-  pool: 'Hồ bơi',
-  gym: 'Phòng gym',
-  'phòng gym': 'Phòng gym',
-  wifi: 'WiFi',
-  internet: 'WiFi',
-  'điều hoà': 'Điều hoà',
-  'máy lạnh': 'Điều hoà',
-  'air conditioner': 'Điều hoà',
-  parking: 'Bãi đỗ xe',
-  'bãi đỗ xe': 'Bãi đỗ xe',
-  'chỗ đậu xe': 'Bãi đỗ xe',
-  balcony: 'Ban công',
-  'ban công': 'Ban công',
-  'bảo vệ': 'Bảo vệ 24/7',
-  'an ninh': 'Bảo vệ 24/7',
-  security: 'Bảo vệ 24/7',
-};
-
 const STOP_WORDS = new Set([
   'the',
   'and',
@@ -83,7 +50,6 @@ const readMarkdownFile = (fileName) => {
     candidatePaths.push(path.join(EXTERNAL_KNOWLEDGE_DIR, fileName));
   }
   candidatePaths.push(path.join(LOCAL_CHATBOT_KNOWLEDGE_DIR, fileName));
-  candidatePaths.push(path.join(ROOT_DIR, fileName));
 
   for (const filePath of candidatePaths) {
     const content = readFileIfExists(filePath);
@@ -91,6 +57,16 @@ const readMarkdownFile = (fileName) => {
   }
 
   return '';
+};
+
+const ensureNonEmptyObject = (value, label) => {
+  const valid = value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length > 0;
+  if (!valid) {
+    throw new Error(
+      `[ChatbotKnowledgeLoader] ${label} is empty. Please define it in markdown under ${EXTERNAL_KNOWLEDGE_DIR || LOCAL_CHATBOT_KNOWLEDGE_DIR}.`
+    );
+  }
+  return value;
 };
 
 const extractJsonFromMarkdown = (markdown) => {
@@ -199,6 +175,30 @@ const parseLegalChecklist = (markdown) => {
   };
 };
 
+const parseHumanConversationStyle = (markdown) => {
+  const parsed = extractJsonFromMarkdown(markdown);
+  return {
+    toneRules: ensureStringArray(parsed?.toneRules),
+    phrasesToAvoid: ensureStringArray(parsed?.phrasesToAvoid),
+    humanConnectors: ensureStringArray(parsed?.humanConnectors),
+  };
+};
+
+const parseBotIdentity = (markdown) => {
+  const parsed = extractJsonFromMarkdown(markdown);
+  return {
+    name: String(parsed?.name || '').trim(),
+    displayName: String(parsed?.displayName || '').trim(),
+    gender: String(parsed?.gender || '').trim(),
+    pronouns: String(parsed?.pronouns || '').trim(),
+    role: String(parsed?.role || '').trim(),
+    personalityTraits: ensureStringArray(parsed?.personalityTraits),
+    conversationPrinciples: ensureStringArray(parsed?.conversationPrinciples),
+    doNot: ensureStringArray(parsed?.doNot),
+    closingPrompts: ensureStringArray(parsed?.closingPrompts),
+  };
+};
+
 const normalizeStandardType = (value) => {
   const normalized = normalizeText(value).replace(/\(.*?\)/g, '').trim();
   if (!normalized) return '';
@@ -223,7 +223,7 @@ const normalizeStandardType = (value) => {
 };
 
 const parsePropertyTypeMappings = (markdown) => {
-  const aliasMap = { ...DEFAULT_PROPERTY_TYPE_MAP };
+  const aliasMap = {};
   const lines = String(markdown || '').split(/\r?\n/);
 
   lines.forEach((line) => {
@@ -251,7 +251,7 @@ const parsePropertyTypeMappings = (markdown) => {
 };
 
 const parseAmenityAliases = (markdown) => {
-  const aliasMap = { ...DEFAULT_AMENITY_ALIAS_MAP };
+  const aliasMap = {};
   const lines = String(markdown || '').split(/\r?\n/);
   let currentAmenity = '';
 
@@ -360,15 +360,25 @@ const loadChatbotKnowledge = () => {
   const workflowMarkdown = readMarkdownFile('common_workflows.md');
   const advisoryPlaybookMarkdown = readMarkdownFile('advisory_playbook.md');
   const legalChecklistMarkdown = readMarkdownFile('legal_checklist.md');
+  const humanConversationStyleMarkdown = readMarkdownFile('human_conversation_style.md');
+  const botIdentityMarkdown = readMarkdownFile('bot_identity.md');
 
   knowledgeCache = {
-    propertyTypeMap: parsePropertyTypeMappings(propertyTypeMarkdown),
-    amenityAliasMap: parseAmenityAliases(amenityMarkdown),
+    propertyTypeMap: ensureNonEmptyObject(
+      parsePropertyTypeMappings(propertyTypeMarkdown),
+      'property_type_mappings.md'
+    ),
+    amenityAliasMap: ensureNonEmptyObject(
+      parseAmenityAliases(amenityMarkdown),
+      'amenity_aliases.md'
+    ),
     navigationGuideSections: parseWebNavigationGuide(navigationMarkdown),
     routeKnowledge: parseRouteKnowledge(routeKnowledgeMarkdown),
     commonWorkflows: parseCommonWorkflows(workflowMarkdown),
     advisoryPlaybook: parseAdvisoryPlaybook(advisoryPlaybookMarkdown),
     legalChecklist: parseLegalChecklist(legalChecklistMarkdown),
+    humanConversationStyle: parseHumanConversationStyle(humanConversationStyleMarkdown),
+    botIdentity: parseBotIdentity(botIdentityMarkdown),
     knowledgeDir: EXTERNAL_KNOWLEDGE_DIR || LOCAL_CHATBOT_KNOWLEDGE_DIR,
   };
 
@@ -384,4 +394,6 @@ module.exports = {
   parseCommonWorkflows,
   parseAdvisoryPlaybook,
   parseLegalChecklist,
+  parseHumanConversationStyle,
+  parseBotIdentity,
 };

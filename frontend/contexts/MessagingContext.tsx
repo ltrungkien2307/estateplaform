@@ -21,6 +21,7 @@ import type {
 
 export const AI_CONVERSATION_ID = "ai-assistant";
 const AI_USER_ID = "ai-assistant";
+const AI_DISPLAY_NAME = "Clara";
 const CONVERSATION_REFRESH_THROTTLE_MS = 2500;
 const getConversationId = (userA: string, userB: string) =>
   [String(userA), String(userB)].sort().join(":");
@@ -128,12 +129,12 @@ const buildAiMessage = (
     sender: fromAi
       ? {
           _id: AI_USER_ID,
-          name: "EstateManager AI",
+          name: AI_DISPLAY_NAME,
           avatar: "",
           role: "provider",
         }
       : null,
-    receiver: fromAi ? null : { _id: AI_USER_ID, name: "EstateManager AI", avatar: "" },
+    receiver: fromAi ? null : { _id: AI_USER_ID, name: AI_DISPLAY_NAME, avatar: "" },
     messageType: "text",
     content,
     imageUrl: "",
