@@ -52,6 +52,11 @@ const transactionSchema = new mongoose.Schema(
       type: Date,
       index: true,
     },
+    subscriptionAppliedAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
     expiresAt: {
       type: Date,
       required: [true, 'expiresAt is required'],

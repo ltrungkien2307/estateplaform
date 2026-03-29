@@ -91,20 +91,11 @@ export default function LuxuryLoginModal({ onClose, initialMode = 'login' }: { o
                 passwordConfirm: regForm.passwordConfirm,
                 address: regForm.address,
                 phone: regForm.phone,
-                role: 'user', // Initial default
+                role,
             });
 
             if (role === 'provider') {
-                const token = localStorage.getItem('estate_manager_token') || '';
-                const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-                await fetch(`${API}/api/users/role-request`, {
-                    method: 'POST',
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json',
-                    },
-                });
-                router.push('/profile/settings?registered=provider');
+                router.push('/provider/dashboard?view=kyc&welcome=1');
                 onClose();
                 return;
             }

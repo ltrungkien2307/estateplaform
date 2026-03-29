@@ -8,7 +8,7 @@ import {
   Plus, DollarSign, Ruler, BedDouble,
   CheckCircle, Clock, XCircle, LoaderCircle,
   AlertTriangle, CheckCircle2, FileUp, IdCard, ShieldCheck, UploadCloud, X,
-  Eye, MousePointerClick, Calendar, LogOut,
+  Eye, EyeOff, Calendar, LogOut,
   LayoutDashboard, Building2, Layers, Settings,
   Check, Sparkles, Zap, Crown, ArrowRight, MapPin, Phone, FileText, Landmark, CreditCard, Search,
 } from "lucide-react";
@@ -239,6 +239,105 @@ function ActionBtn({
   );
 }
 
+type QuotaPromptSource = "nav" | "route" | "create" | "edit";
+
+function QuotaUpgradeModal({
+  open,
+  message,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  message: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  if (!open) return null;
+
+  return (
+    <div
+      onClick={onCancel}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 1200,
+        background: "rgba(17,28,20,0.45)",
+        backdropFilter: "blur(6px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "1rem",
+      }}
+    >
+      <div
+        onClick={(event) => event.stopPropagation()}
+        style={{
+          width: "100%",
+          maxWidth: 560,
+          background: "rgba(255,255,255,0.96)",
+          border: "1px solid rgba(154,124,69,0.22)",
+          borderRadius: 16,
+          boxShadow: "0 24px 64px rgba(17,28,20,0.2)",
+          padding: "1.4rem 1.5rem",
+        }}
+      >
+        <p style={{ fontSize: "0.56rem", letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--e-gold)", marginBottom: 6, fontFamily: "var(--e-sans)", fontWeight: 700 }}>
+          Giới Hạn Tin Đăng
+        </p>
+        <h4 style={{ margin: 0, fontFamily: "var(--e-serif)", fontSize: "1.2rem", color: "var(--e-charcoal)", fontWeight: 600, lineHeight: 1.25 }}>
+          Không thể đăng tin mới
+        </h4>
+        <p style={{ margin: "0.8rem 0 0.8rem", fontSize: "0.78rem", color: "var(--e-muted)", lineHeight: 1.65, fontFamily: "var(--e-sans)" }}>
+          {message}
+        </p>
+        <p style={{ margin: "0 0 1rem", fontSize: "0.76rem", color: "var(--e-charcoal)", fontFamily: "var(--e-sans)", fontWeight: 600 }}>
+          Bạn có muốn nâng cấp gói ngay bây giờ không?
+        </p>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.55rem", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={onCancel}
+            style={{
+              padding: "8px 14px",
+              borderRadius: 9,
+              border: "1px solid rgba(154,124,69,0.2)",
+              background: "rgba(255,255,255,0.86)",
+              color: "var(--e-charcoal)",
+              cursor: "pointer",
+              fontFamily: "var(--e-sans)",
+              fontSize: "0.66rem",
+              fontWeight: 700,
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+            }}
+          >
+            Để Sau
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            style={{
+              padding: "8px 14px",
+              borderRadius: 9,
+              border: "1px solid var(--e-charcoal)",
+              background: "var(--e-charcoal)",
+              color: "#fff",
+              cursor: "pointer",
+              fontFamily: "var(--e-sans)",
+              fontSize: "0.66rem",
+              fontWeight: 700,
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+            }}
+          >
+            Nâng Cấp Ngay
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ═══════════════════════════════════════════════════════════
    HELPERS — resolve DB field naming inconsistency
    DB stores: subscriptionPlan + listingsCount (flat fields)
@@ -333,14 +432,11 @@ function DashboardView({
     Giá: p.price,
   }));
 
-  const mockViews = timeFilter === "all" ? 24500 : timeFilter === "month" ? 8200 : 1540;
-  const mockLeads = timeFilter === "all" ? 342 : timeFilter === "month" ? 124 : 28;
-
   const STATS = [
     { label: "Tổng BĐS", value: stats.total, icon: <BedDouble size={18} /> },
-    { label: "Lượt Xem", value: fmtNum(mockViews), icon: <Eye size={18} /> },
-    { label: "Tương Tác", value: fmtNum(mockLeads), icon: <MousePointerClick size={18} /> },
-    { label: "Đã Duyệt", value: stats.approved, icon: <CheckCircle size={18} /> },
+    { label: "Đã Ẩn", value: fmtNum(pieStatusCount.hidden), icon: <EyeOff size={18} /> },
+    { label: "Bị Từ Chối", value: fmtNum(pieStatusCount.rejected), icon: <XCircle size={18} /> },
+    { label: "Đang Hiển Thị", value: stats.approved, icon: <CheckCircle size={18} /> },
     { label: "Chờ Duyệt", value: stats.pending, icon: <Clock size={18} /> },
     { label: "Giá Trung Bình", value: stats.avgPrice > 0 ? fmtVND(stats.avgPrice) : "—", icon: <DollarSign size={18} /> },
   ];
@@ -849,26 +945,38 @@ function isPaidPlan(plan: SubscriptionPlan | null): plan is PaidSubscriptionPlan
   return plan === "Pro" || plan === "ProPlus";
 }
 
-function PlansView({ currentPlan, listingsUsed }: {
+function PlansView({ currentPlan, listingsUsed, subscriptionStatus }: {
   currentPlan: SubscriptionPlan;
   listingsUsed: number;
+  subscriptionStatus: CurrentSubscriptionStatus | null;
 }) {
   const [selected, setSelected] = useState<SubscriptionPlan | null>(null);
   const [payMethod, setPayMethod] = useState<CheckoutPaymentMethod>("VNPay");
   const [processing, setProcessing] = useState(false);
+  const [showUpgradeConfirm, setShowUpgradeConfirm] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [transactions, setTransactions] = useState<SubscriptionTransaction[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [historyPage, setHistoryPage] = useState(1);
   const [historyTotalPages, setHistoryTotalPages] = useState(1);
+  const isProPlusActive = subscriptionStatus?.planType === "ProPlus" && subscriptionStatus?.isActive;
+  const isProActive = subscriptionStatus?.planType === "Pro" && subscriptionStatus?.isActive;
   const limit = PLAN_LIMITS[currentPlan];
   // For unlimited plan, show actual count vs a soft reference of 50 (purely visual)
   const usagePct = limit === "∞"
     ? Math.min(95, (listingsUsed / 50) * 100)
     : Math.min(100, listingsUsed > 0 ? (listingsUsed / (limit as number)) * 100 : 0);
   const selectedConfig = PLANS_CONFIG.find(p => p.plan === selected);
-  const canCheckout = Boolean(selected && selected !== currentPlan && isPaidPlan(selected));
+  const selectedDowngradeBlocked = Boolean(
+    selected && isProPlusActive && (selected === "Free" || selected === "Pro")
+  );
+  const canCheckout = Boolean(
+    selected &&
+    selected !== currentPlan &&
+    isPaidPlan(selected) &&
+    !selectedDowngradeBlocked
+  );
 
   const loadTransactions = useCallback(async (page = 1) => {
     try {
@@ -892,11 +1000,25 @@ function PlansView({ currentPlan, listingsUsed }: {
   }, [selected, payMethod]);
 
   useEffect(() => {
+    if (selected && isProPlusActive && (selected === "Free" || selected === "Pro")) {
+      setSelected(null);
+    }
+  }, [selected, isProPlusActive]);
+
+  useEffect(() => {
     void loadTransactions(historyPage);
   }, [historyPage, loadTransactions]);
 
-  const handleCheckout = async () => {
+  const isSelectionDisabled = (plan: SubscriptionPlan) =>
+    isProPlusActive && currentPlan === "ProPlus" && (plan === "Free" || plan === "Pro");
+
+  const proceedCheckout = async () => {
     if (!selected || selected === currentPlan) {
+      return;
+    }
+
+    if (isSelectionDisabled(selected)) {
+      setCheckoutError("Gói Pro Plus đang còn hạn, bạn chưa thể chọn gói thấp hơn.");
       return;
     }
 
@@ -933,6 +1055,19 @@ function PlansView({ currentPlan, listingsUsed }: {
     }
   };
 
+  const handleCheckout = async () => {
+    if (!selected || selected === currentPlan) {
+      return;
+    }
+
+    if (currentPlan === "Pro" && selected === "ProPlus" && isProActive) {
+      setShowUpgradeConfirm(true);
+      return;
+    }
+
+    await proceedCheckout();
+  };
+
   return (
     <div style={{ padding: "2.5rem 2vw" }}>
       <SectionHeader
@@ -965,24 +1100,37 @@ function PlansView({ currentPlan, listingsUsed }: {
         </div>
       </GlassCard>
 
+      {isProPlusActive && (
+        <div style={{ marginBottom: "1rem", border: "1px solid rgba(201,169,110,0.25)", background: "rgba(201,169,110,0.08)", padding: "0.75rem 0.9rem", fontSize: "0.72rem", color: "#7a5a24", lineHeight: 1.55, borderRadius: 9, fontFamily: "var(--e-sans)" }}>
+          Bạn đang có gói <strong>Pro Plus</strong> còn hiệu lực, nên các gói thấp hơn đã được khóa cho đến khi gói hiện tại hết hạn.
+        </div>
+      )}
+
       {/* Plan cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.9rem", marginBottom: "1.6rem" }}>
         {PLANS_CONFIG.map(p => {
           const isCurrent = currentPlan === p.plan;
           const isSelected = selected === p.plan;
+          const isDisabled = !isCurrent && isSelectionDisabled(p.plan);
           return (
-            <div key={p.plan} onClick={() => !isCurrent && setSelected(p.plan)} style={{
+            <div key={p.plan} onClick={() => !isCurrent && !isDisabled && setSelected(p.plan)} style={{
               position: "relative", padding: "1.8rem 1.6rem", borderRadius: 16,
               border: `1px solid ${isSelected && !isCurrent ? p.accent : isCurrent ? "rgba(201,169,110,0.35)" : "rgba(154,124,69,0.12)"}`,
               background: "rgba(255,255,255,0.88)", backdropFilter: "blur(10px)",
-              cursor: isCurrent ? "default" : "pointer",
+              cursor: isCurrent || isDisabled ? "not-allowed" : "pointer",
               boxShadow: isSelected && !isCurrent ? `0 8px 32px ${p.accentBorder}` : "0 2px 12px rgba(0,0,0,0.04)",
               overflow: "hidden",
               transition: "transform 0.35s cubic-bezier(0.16,1,0.3,1), box-shadow 0.35s cubic-bezier(0.16,1,0.3,1)",
+              opacity: isDisabled ? 0.6 : 1,
             }}>
               <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: isCurrent || isSelected ? `linear-gradient(90deg, ${p.accent}, transparent)` : "transparent", transition: "background 0.3s" }} />
               {isCurrent && (
                 <div style={{ position: "absolute", top: "1rem", right: "1rem", fontSize: "0.5rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--e-gold)", fontWeight: 700, background: "rgba(201,169,110,0.1)", border: "1px solid rgba(201,169,110,0.25)", padding: "3px 8px", borderRadius: 6, fontFamily: "var(--e-sans)" }}>✦ Hiện tại</div>
+              )}
+              {!isCurrent && isDisabled && (
+                <div style={{ position: "absolute", top: "1rem", right: "1rem", fontSize: "0.5rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "#8a6d3b", fontWeight: 700, background: "rgba(201,169,110,0.1)", border: "1px solid rgba(201,169,110,0.25)", padding: "3px 8px", borderRadius: 6, fontFamily: "var(--e-sans)" }}>
+                  Bị khóa
+                </div>
               )}
               <div style={{ width: 36, height: 36, borderRadius: 9, background: p.accentLight, border: `1px solid ${p.accentBorder}`, display: "flex", alignItems: "center", justifyContent: "center", color: p.accent, marginBottom: "1.1rem" }}>{p.icon}</div>
               <p style={{ fontSize: "0.54rem", letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--e-muted)", marginBottom: 4, fontFamily: "var(--e-sans)" }}>Gói</p>
@@ -1005,8 +1153,16 @@ function PlansView({ currentPlan, listingsUsed }: {
                 ))}
               </ul>
               {!isCurrent ? (
-                <button onClick={e => { e.stopPropagation(); setSelected(p.plan); }} style={{ width: "100%", padding: "10px", background: isSelected ? p.accent : "transparent", color: isSelected ? "#fff" : "var(--e-charcoal)", border: `1px solid ${isSelected ? p.accent : "rgba(154,124,69,0.2)"}`, borderRadius: 10, cursor: "pointer", fontSize: "0.63rem", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "var(--e-sans)", transition: "all 0.22s" }}>
-                  {isSelected ? <><Check size={11} strokeWidth={3} /> Đã chọn</> : <>Chọn gói <ArrowRight size={11} /></>}
+                <button
+                  disabled={isDisabled}
+                  onClick={e => { e.stopPropagation(); if (!isDisabled) setSelected(p.plan); }}
+                  style={{ width: "100%", padding: "10px", background: isSelected ? p.accent : "transparent", color: isSelected ? "#fff" : "var(--e-charcoal)", border: `1px solid ${isSelected ? p.accent : "rgba(154,124,69,0.2)"}`, borderRadius: 10, cursor: isDisabled ? "not-allowed" : "pointer", fontSize: "0.63rem", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "var(--e-sans)", transition: "all 0.22s", opacity: isDisabled ? 0.6 : 1 }}
+                >
+                  {isDisabled
+                    ? "Đang dùng Pro Plus"
+                    : isSelected
+                      ? <><Check size={11} strokeWidth={3} /> Đã chọn</>
+                      : <>Chọn gói <ArrowRight size={11} /></>}
                 </button>
               ) : (
                 <div style={{ width: "100%", padding: "10px", textAlign: "center", background: "rgba(154,124,69,0.05)", border: "1px solid rgba(154,124,69,0.15)", borderRadius: 10, fontSize: "0.63rem", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--e-muted)", fontFamily: "var(--e-sans)" }}>
@@ -1296,6 +1452,96 @@ function PlansView({ currentPlan, listingsUsed }: {
           </GlassCard>
         ))}
       </div>
+
+      {showUpgradeConfirm && (
+        <div
+          onClick={() => !processing && setShowUpgradeConfirm(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1000,
+            background: "rgba(17,28,20,0.45)",
+            backdropFilter: "blur(6px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1rem",
+          }}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: 520,
+              background: "rgba(255,255,255,0.96)",
+              border: "1px solid rgba(154,124,69,0.2)",
+              borderRadius: 16,
+              boxShadow: "0 24px 64px rgba(17,28,20,0.2)",
+              padding: "1.4rem 1.5rem",
+            }}
+          >
+            <p style={{ fontSize: "0.56rem", letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--e-gold)", marginBottom: 6, fontFamily: "var(--e-sans)", fontWeight: 700 }}>
+              Xác Nhận Nâng Cấp
+            </p>
+            <h4 style={{ margin: 0, fontFamily: "var(--e-serif)", fontSize: "1.2rem", color: "var(--e-charcoal)", fontWeight: 600, lineHeight: 1.25 }}>
+              Bạn sẽ mất thời hạn còn lại của gói Pro
+            </h4>
+            <p style={{ margin: "0.8rem 0 1.1rem", fontSize: "0.78rem", color: "var(--e-muted)", lineHeight: 1.65, fontFamily: "var(--e-sans)" }}>
+              Bạn đang còn hạn gói <strong>Pro</strong>. Nếu tiếp tục nâng cấp lên <strong>Pro Plus</strong> ngay bây giờ, thời hạn còn lại của gói hiện tại sẽ bị thay thế và <strong>không thể hoàn tiền</strong>.
+            </p>
+            <p style={{ margin: "0 0 1rem", fontSize: "0.76rem", color: "var(--e-charcoal)", fontFamily: "var(--e-sans)", fontWeight: 600 }}>
+              Bạn có muốn tiếp tục?
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.55rem", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={() => setShowUpgradeConfirm(false)}
+                disabled={processing}
+                style={{
+                  padding: "8px 14px",
+                  borderRadius: 9,
+                  border: "1px solid rgba(154,124,69,0.2)",
+                  background: "rgba(255,255,255,0.86)",
+                  color: "var(--e-charcoal)",
+                  cursor: processing ? "not-allowed" : "pointer",
+                  fontFamily: "var(--e-sans)",
+                  fontSize: "0.66rem",
+                  fontWeight: 700,
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  opacity: processing ? 0.7 : 1,
+                }}
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setShowUpgradeConfirm(false);
+                  await proceedCheckout();
+                }}
+                disabled={processing}
+                style={{
+                  padding: "8px 14px",
+                  borderRadius: 9,
+                  border: "1px solid var(--e-charcoal)",
+                  background: "var(--e-charcoal)",
+                  color: "#fff",
+                  cursor: processing ? "wait" : "pointer",
+                  fontFamily: "var(--e-sans)",
+                  fontSize: "0.66rem",
+                  fontWeight: 700,
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  opacity: processing ? 0.7 : 1,
+                }}
+              >
+                Tiếp Tục Thanh Toán
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1311,8 +1557,10 @@ interface PropertyFormData {
   yearBuilt?: number; amenities: string[]; images?: File[]; ownershipDocuments?: File[];
 }
 
-function CreateView({ onCreated }: { onCreated: () => void }) {
-  const router = useRouter();
+function CreateView({ onCreated, onQuotaExceeded }: {
+  onCreated: () => void;
+  onQuotaExceeded: (message?: string) => void;
+}) {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (data: PropertyFormData) => {
@@ -1333,8 +1581,7 @@ function CreateView({ onCreated }: { onCreated: () => void }) {
       const message = error?.message || "Lỗi khi tạo bất động sản";
       const isQuotaError = error instanceof ApiError && error.statusCode === 403 && message.toLowerCase().match(/quota|plan|upgrade|nâng cấp|gói/);
       if (isQuotaError) {
-        const goUpgrade = confirm("Bạn đã đạt giới hạn tin đăng. Nâng cấp ngay không?");
-        if (goUpgrade) router.push("/provider/dashboard?view=plans");
+        onQuotaExceeded(message);
         return;
       }
       alert(message);
@@ -1347,10 +1594,9 @@ function CreateView({ onCreated }: { onCreated: () => void }) {
 /* ═══════════════════════════════════════════════════════════
    EDIT VIEW
 ═══════════════════════════════════════════════════════════ */
-function EditView({ propertyId, onUpdated, onCancel }: {
-  propertyId: string; onUpdated: () => void; onCancel: () => void;
+function EditView({ propertyId, onUpdated, onCancel, onQuotaExceeded }: {
+  propertyId: string; onUpdated: () => void; onCancel: () => void; onQuotaExceeded: (message?: string) => void;
 }) {
-  const router = useRouter();
   const [property, setProperty] = useState<Property | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [initialized, setInitialized] = useState(false);
@@ -1383,8 +1629,7 @@ function EditView({ propertyId, onUpdated, onCancel }: {
       const message = error?.message || "Lỗi khi cập nhật bất động sản";
       const isQuotaError = error instanceof ApiError && error.statusCode === 403 && message.toLowerCase().match(/quota|plan|upgrade|nâng cấp|gói/);
       if (isQuotaError) {
-        const goUpgrade = confirm("Bạn đã đạt giới hạn. Nâng cấp gói ngay không?");
-        if (goUpgrade) router.push("/provider/dashboard?view=plans");
+        onQuotaExceeded(message);
         return;
       }
       alert(message);
@@ -1876,6 +2121,15 @@ export default function ProviderDashboard() {
     recentSold: [],
   });
   const [subscriptionStatus, setSubscriptionStatus] = useState<CurrentSubscriptionStatus | null>(null);
+  const [quotaPrompt, setQuotaPrompt] = useState<{
+    open: boolean;
+    message: string;
+    source: QuotaPromptSource;
+  }>({
+    open: false,
+    message: "",
+    source: "nav",
+  });
 
   const handleSidebarLogout = useCallback(() => {
     logout();
@@ -1905,20 +2159,23 @@ export default function ProviderDashboard() {
     [listingLimitForQuota, listingsUsedForQuota]
   );
 
+  const openQuotaUpgradePrompt = useCallback((source: QuotaPromptSource, rawMessage?: string) => {
+    const fallbackMessage = `Bạn đã đạt giới hạn ${formatPlanLimit(listingLimitForQuota)} tin đăng của gói ${effectivePlanForQuota}. Không thể đăng tin mới.`;
+    setQuotaPrompt({
+      open: true,
+      message: (rawMessage || fallbackMessage).trim(),
+      source,
+    });
+  }, [effectivePlanForQuota, listingLimitForQuota]);
+
   const handleQuotaExceededRedirect = useCallback((source: "nav" | "route") => {
     if (!isCreateBlockedByQuota) return;
-    const message = `Bạn đã đạt giới hạn ${formatPlanLimit(listingLimitForQuota)} tin đăng của gói ${effectivePlanForQuota}. Không thể đăng tin mới.`;
-    const goUpgrade = window.confirm(`${message}\n\nBạn có muốn nâng cấp gói ngay bây giờ không?`);
+    openQuotaUpgradePrompt(source);
+  }, [isCreateBlockedByQuota, openQuotaUpgradePrompt]);
 
-    if (goUpgrade) {
-      setView("plans");
-      void router.replace(
-        { pathname: "/provider/dashboard", query: { view: "plans" } },
-        undefined,
-        { shallow: true }
-      );
-      return;
-    }
+  const handleQuotaPromptCancel = useCallback(() => {
+    const source = quotaPrompt.source;
+    setQuotaPrompt({ open: false, message: "", source: "nav" });
 
     if (source === "route") {
       setView("properties");
@@ -1928,7 +2185,17 @@ export default function ProviderDashboard() {
         { shallow: true }
       );
     }
-  }, [effectivePlanForQuota, isCreateBlockedByQuota, listingLimitForQuota, router]);
+  }, [quotaPrompt.source, router]);
+
+  const handleQuotaPromptConfirm = useCallback(() => {
+    setQuotaPrompt({ open: false, message: "", source: "nav" });
+    setView("plans");
+    void router.replace(
+      { pathname: "/provider/dashboard", query: { view: "plans" } },
+      undefined,
+      { shallow: true }
+    );
+  }, [router]);
 
   useEffect(() => {
     const q = router.query.view as string | undefined;
@@ -2245,9 +2512,33 @@ export default function ProviderDashboard() {
             <div style={{ width: "100%", maxWidth: "1200px", margin: "0 auto", flex: 1 }}>
               {view === "dashboard" && <ViewWrapper><DashboardView provider={user} stats={stats} properties={properties} recentProperties={properties.slice(0, 5)} onNavigate={handleSetView} salesStats={salesStats} subscriptionStatus={subscriptionStatus} /></ViewWrapper>}
               {view === "properties" && <ViewWrapper><PropertiesView properties={properties} onDelete={handleDelete} onEdit={handleEditProperty} onMarkSold={handleMarkSold} onResubmit={handleResubmitForApproval} onToggleVisibility={handleToggleVisibility} onCreate={() => handleSetView("create")} /></ViewWrapper>}
-              {view === "plans" && <ViewWrapper><PlansView currentPlan={(subscriptionStatus?.planType as SubscriptionPlan | undefined) ?? getUserPlan(user)} listingsUsed={stats.total} /></ViewWrapper>}
-              {view === "create" && <ViewWrapper><CreateView onCreated={handlePropertyCreated} /></ViewWrapper>}
-              {view === "edit" && editPropertyId && <ViewWrapper><EditView propertyId={editPropertyId} onUpdated={handlePropertyUpdated} onCancel={() => handleSetView("properties")} /></ViewWrapper>}
+              {view === "plans" && (
+                <ViewWrapper>
+                  <PlansView
+                    currentPlan={(subscriptionStatus?.planType as SubscriptionPlan | undefined) ?? getUserPlan(user)}
+                    listingsUsed={stats.total}
+                    subscriptionStatus={subscriptionStatus}
+                  />
+                </ViewWrapper>
+              )}
+              {view === "create" && (
+                <ViewWrapper>
+                  <CreateView
+                    onCreated={handlePropertyCreated}
+                    onQuotaExceeded={(message) => openQuotaUpgradePrompt("create", message)}
+                  />
+                </ViewWrapper>
+              )}
+              {view === "edit" && editPropertyId && (
+                <ViewWrapper>
+                  <EditView
+                    propertyId={editPropertyId}
+                    onUpdated={handlePropertyUpdated}
+                    onCancel={() => handleSetView("properties")}
+                    onQuotaExceeded={(message) => openQuotaUpgradePrompt("edit", message)}
+                  />
+                </ViewWrapper>
+              )}
               {view === "kyc" && <ViewWrapper><KycView /></ViewWrapper>}
             </div>
 
@@ -2257,6 +2548,13 @@ export default function ProviderDashboard() {
           </div>
         </main>
       </div>
+
+      <QuotaUpgradeModal
+        open={quotaPrompt.open}
+        message={quotaPrompt.message}
+        onCancel={handleQuotaPromptCancel}
+        onConfirm={handleQuotaPromptConfirm}
+      />
     </>
   );
 }

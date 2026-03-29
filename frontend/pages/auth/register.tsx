@@ -45,22 +45,12 @@ export default function RegisterPage() {
                 passwordConfirm: form.passwordConfirm,
                 address: form.address,
                 phone: form.phone,
-                role: 'user', // luôn tạo là user trước
+                role,
             });
 
-            // Nếu chọn provider → gửi role request
+            // Nếu chọn provider → vào dashboard provider, cần KYC trước khi đăng bài
             if (role === 'provider') {
-                const token = localStorage.getItem('estate_manager_token') || '';
-                const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-                await fetch(`${API}/api/users/role-request`, {
-                    method: 'POST',
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json',
-                    },
-                });
-                // Redirect về profile với thông báo pending
-                router.push('/profile/settings?registered=provider');
+                router.push('/provider/dashboard?view=kyc&welcome=1');
                 return;
             }
 

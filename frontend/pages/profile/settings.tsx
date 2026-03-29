@@ -110,6 +110,16 @@ export default function ProfileSettings() {
   };
 
   async function handleRequestProvider() {
+    const hasVerifiedKyc = user?.kycStatus === "verified" && user?.isVerified === true;
+    if (!hasVerifiedKyc) {
+      setMessage({
+        type: "error",
+        text: "Bạn cần xác thực KYC thành công trước khi gửi yêu cầu nâng cấp Provider.",
+      });
+      setShowProviderModal(false);
+      return;
+    }
+
     setModalLoading(true);
     try {
       const res = await fetch(`${API}/api/users/role-request`, {
@@ -138,6 +148,7 @@ export default function ProfileSettings() {
   }
 
   const isUser = user?.role === "user";
+  const canRequestProvider = user?.kycStatus === "verified" && user?.isVerified === true;
 
   if (loading) {
     return (
@@ -487,15 +498,25 @@ export default function ProfileSettings() {
                             </div>
                           </div>
                           <button
-                            onClick={() => setShowProviderModal(true)}
+                            onClick={() => {
+                              if (!canRequestProvider) {
+                                setMessage({
+                                  type: "error",
+                                  text: "Bạn cần xác thực KYC thành công trước khi gửi yêu cầu nâng cấp Provider.",
+                                });
+                                return;
+                              }
+                              setShowProviderModal(true);
+                            }}
+                            disabled={!canRequestProvider}
                             style={{
                               display: 'flex', alignItems: 'center', gap: '0.6rem',
-                              padding: '0.85rem 1.4rem', background: 'var(--e-charcoal)',
+                              padding: '0.85rem 1.4rem', background: canRequestProvider ? 'var(--e-charcoal)' : 'var(--e-muted)',
                               border: 'none', borderRadius: '10px', cursor: 'pointer',
                               width: 'fit-content', fontSize: '0.78rem', fontWeight: 700,
                               color: 'var(--e-white)', letterSpacing: '0.06em',
                               textTransform: 'uppercase', fontFamily: 'var(--e-sans)',
-                              transition: 'background 0.2s',
+                              transition: 'background 0.2s', opacity: canRequestProvider ? 1 : 0.7,
                             }}
                             onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = 'var(--e-gold)'}
                             onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = 'var(--e-charcoal)'}
@@ -540,20 +561,40 @@ export default function ProfileSettings() {
                             </div>
 
                             <button
-                              onClick={() => setShowProviderModal(true)}
+                              onClick={() => {
+                                if (!canRequestProvider) {
+                                  setMessage({
+                                    type: "error",
+                                    text: "Bạn cần xác thực KYC thành công trước khi gửi yêu cầu nâng cấp Provider.",
+                                  });
+                                  return;
+                                }
+                                setShowProviderModal(true);
+                              }}
+                              disabled={!canRequestProvider}
                               style={{
                                 display: 'inline-flex', alignItems: 'center', gap: '0.6rem',
-                                padding: '0.9rem 2rem', background: 'var(--e-charcoal)',
+                                padding: '0.9rem 2rem', background: canRequestProvider ? 'var(--e-charcoal)' : 'var(--e-muted)',
                                 border: 'none', borderRadius: '10px', cursor: 'pointer',
                                 fontSize: '0.78rem', fontWeight: 700, color: 'var(--e-white)',
                                 letterSpacing: '0.08em', textTransform: 'uppercase',
-                                fontFamily: 'var(--e-sans)', transition: 'all 0.25s',
+                                fontFamily: 'var(--e-sans)', transition: 'all 0.25s', opacity: canRequestProvider ? 1 : 0.7,
                               }}
                               onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = 'var(--e-gold)'}
                               onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = 'var(--e-charcoal)'}
                             >
                               <Sparkles size={15} /> Đăng Ký Provider Ngay
                             </button>
+                            {!canRequestProvider && (
+                              <p style={{
+                                marginTop: '0.8rem',
+                                fontSize: '0.74rem',
+                                color: '#b45309',
+                                fontFamily: 'var(--e-sans)',
+                              }}>
+                                Bạn cần hoàn thành KYC trước khi gửi yêu cầu nâng cấp Provider.
+                              </p>
+                            )}
                           </div>
                         </div>
                       )}
@@ -656,11 +697,11 @@ export default function ProfileSettings() {
               </button>
               <button
                 onClick={handleRequestProvider}
-                disabled={modalLoading}
+                disabled={modalLoading || !canRequestProvider}
                 style={{
                   flex: 2, padding: '0.9rem',
-                  background: modalLoading ? 'var(--e-muted)' : 'var(--e-charcoal)',
-                  border: 'none', cursor: modalLoading ? 'wait' : 'pointer',
+                  background: modalLoading || !canRequestProvider ? 'var(--e-muted)' : 'var(--e-charcoal)',
+                  border: 'none', cursor: modalLoading || !canRequestProvider ? 'not-allowed' : 'pointer',
                   fontSize: '0.75rem', fontWeight: 600, color: 'var(--e-white)',
                   fontFamily: 'var(--e-sans)', letterSpacing: '0.08em',
                   textTransform: 'uppercase', borderRadius: '2px',
@@ -687,7 +728,7 @@ export default function ProfileSettings() {
                     }} />
                     Đang gửi...
                   </>
-                ) : 'Gửi Yêu Cầu'}
+                ) : canRequestProvider ? 'Gửi Yêu Cầu' : 'Cần KYC Trước'}
               </button>
             </div>
           </div>

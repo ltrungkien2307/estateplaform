@@ -36,7 +36,7 @@ exports.verifyProviderStatus = (req, res, next) => {
     if (req.user.role === 'provider' && !req.user.isVerified) {
         return res.status(403).json({
             status: 'error',
-            message: 'Your provider account is not verified yet. Please wait for admin approval.'
+            message: 'Tài khoản Provider chưa hoàn tất KYC. Vui lòng xác thực KYC trước khi đăng bài.'
         });
     }
     next();

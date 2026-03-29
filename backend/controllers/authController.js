@@ -113,6 +113,12 @@ exports.signup = async (req, res, next) => {
       phone,
     };
 
+    if ((role || 'user') === 'provider') {
+      filteredBody.isVerified = false;
+      filteredBody.kycStatus = 'pending';
+      filteredBody.kycRejectionReason = '';
+    }
+
     if (role === 'provider' && kycDocuments && kycDocuments.length > 0) {
       filteredBody.kycDocuments = kycDocuments;
     }

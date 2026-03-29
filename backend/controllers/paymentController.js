@@ -111,14 +111,23 @@ const ensureSubscriptionApplied = async (transaction) => {
   if (!user) throw new Error('User not found for subscription update');
 
   const now = new Date();
-  const currentExpiry = toDate(user.subscriptionExpiresAt);
-  const currentPlan = String(user.subscriptionPlan || 'Free');
-  const canCarryRemainingTime =
-    ['Pro', 'ProPlus'].includes(currentPlan) &&
-    currentExpiry &&
-    currentExpiry.getTime() > now.getTime();
+  const lock = await Transaction.findOneAndUpdate(
+    {
+      _id: transaction._id,
+      $or: [{ subscriptionAppliedAt: null }, { subscriptionAppliedAt: { $exists: false } }],
+    },
+    {
+      $set: {
+        subscriptionAppliedAt: now,
+      },
+    },
+    { new: true }
+  );
 
-  const subscribedAt = canCarryRemainingTime ? currentExpiry : now;
+  // Already applied by another callback thread (VNPay return/IPN), keep idempotent.
+  if (!lock) return;
+
+  const subscribedAt = now;
   const subscriptionExpiresAt = addSubscriptionDuration(subscribedAt);
   const durationDays = calculateDurationDays(subscribedAt, subscriptionExpiresAt);
 
@@ -131,7 +140,7 @@ const ensureSubscriptionApplied = async (transaction) => {
     { userId: user._id, status: 'active' },
     {
       $set: {
-        status: 'expired',
+        status: 'cancelled',
         lastRenewedAt: now,
       },
     }
@@ -275,6 +284,81 @@ const normalizeSubscriptionStatuses = async (userId, now = new Date()) => {
       },
     }
   );
+
+  const activeSubscriptions = await Subscription.find({
+    userId,
+    status: 'active',
+    expiresAt: { $gt: now },
+  })
+    .sort({ createdAt: -1, updatedAt: -1, expiresAt: -1 })
+    .select('_id planType expiresAt subscribedAt createdAt durationDays transactionId');
+
+  if (activeSubscriptions.length > 1) {
+    const [, ...duplicatedActive] = activeSubscriptions;
+    const duplicatedIds = duplicatedActive.map((item) => item._id);
+    await Subscription.updateMany(
+      {
+        _id: { $in: duplicatedIds },
+        status: 'active',
+      },
+      {
+        $set: {
+          status: 'cancelled',
+          lastRenewedAt: now,
+        },
+      }
+    );
+  }
+
+  const currentActive = activeSubscriptions[0] || null;
+  if (!currentActive) return null;
+
+  const activeSubscribedAt = toDate(currentActive.subscribedAt);
+  const isFutureStart = activeSubscribedAt && activeSubscribedAt.getTime() > now.getTime();
+
+  // Legacy-bug self-healing:
+  // Old logic could set subscribedAt to a future date when user upgraded before expiry.
+  // Under current business rule, subscription starts immediately at payment success time.
+  if (isFutureStart) {
+    const createdAt = toDate(currentActive.createdAt);
+    const correctedStart =
+      createdAt && createdAt.getTime() <= now.getTime() ? createdAt : now;
+    const correctedExpiry = addSubscriptionDuration(correctedStart);
+    const correctedDurationDays = calculateDurationDays(correctedStart, correctedExpiry);
+
+    await Subscription.updateOne(
+      { _id: currentActive._id },
+      {
+        $set: {
+          subscribedAt: correctedStart,
+          expiresAt: correctedExpiry,
+          durationDays: correctedDurationDays,
+          lastRenewedAt: now,
+        },
+      }
+    );
+
+    if (currentActive.transactionId) {
+      await Transaction.updateOne(
+        { _id: currentActive.transactionId },
+        {
+          $set: {
+            subscriptionExpiresAt: correctedExpiry,
+            expiresAt: correctedExpiry,
+          },
+        }
+      );
+    }
+
+    return {
+      ...currentActive.toObject(),
+      subscribedAt: correctedStart,
+      expiresAt: correctedExpiry,
+      durationDays: correctedDurationDays,
+    };
+  }
+
+  return currentActive;
 };
 
 const getSubscriptionStatusFromUserFallback = (user, now = new Date()) => {
@@ -319,6 +403,30 @@ exports.createCheckout = async (req, res, next) => {
     }
 
     const { subscriptionPlan, paymentMethod, amount } = value;
+    const now = new Date();
+    let activeSubscription = await normalizeSubscriptionStatuses(req.user.id, now);
+    if (!activeSubscription) {
+      activeSubscription = await Subscription.findOne({
+        userId: req.user.id,
+        status: 'active',
+        expiresAt: { $gt: now },
+      }).sort({ createdAt: -1, updatedAt: -1, expiresAt: -1 });
+    }
+
+    const currentPlan = String(activeSubscription?.planType || req.user?.subscriptionPlan || 'Free');
+    const currentExpiry = toDate(activeSubscription?.expiresAt || req.user?.subscriptionExpiresAt);
+    const hasActivePaidPlan =
+      ['Pro', 'ProPlus'].includes(currentPlan) &&
+      currentExpiry &&
+      currentExpiry.getTime() > now.getTime();
+
+    if (hasActivePaidPlan && currentPlan === 'ProPlus' && subscriptionPlan !== 'ProPlus') {
+      return res.status(409).json({
+        status: 'error',
+        message: 'Gói Pro Plus của bạn vẫn còn hiệu lực. Không thể hạ xuống gói thấp hơn trước khi hết hạn.',
+      });
+    }
+
     const transactionAmount = paymentService.getPlanAmount(
       subscriptionPlan,
       paymentMethod,
@@ -475,7 +583,7 @@ exports.getMyCurrentSubscription = async (req, res, next) => {
 
     const [activeSubscription, latestSubscription] = await Promise.all([
       Subscription.findOne({ userId: req.user.id, status: 'active' })
-        .sort({ expiresAt: -1, createdAt: -1 }),
+        .sort({ createdAt: -1, updatedAt: -1, expiresAt: -1 }),
       Subscription.findOne({ userId: req.user.id })
         .sort({ createdAt: -1 }),
     ]);

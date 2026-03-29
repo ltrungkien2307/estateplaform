@@ -359,6 +359,22 @@ exports.createRoleRequest = async (req, res, next) => {
       });
     }
 
+    const currentUser = await User.findById(req.user.id).select('kycStatus isVerified');
+    if (!currentUser) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'User not found',
+      });
+    }
+
+    const hasVerifiedKyc = currentUser.kycStatus === 'verified' && currentUser.isVerified === true;
+    if (!hasVerifiedKyc) {
+      return res.status(403).json({
+        status: 'error',
+        message: 'Bạn cần xác thực KYC thành công trước khi gửi yêu cầu nâng cấp lên Provider.',
+      });
+    }
+
     const existing = await RoleRequest.findOne({
       userId: req.user.id,
       status: 'pending',

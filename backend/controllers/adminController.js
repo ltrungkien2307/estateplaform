@@ -484,6 +484,66 @@ exports.verifyProvider = async (req, res, next) => {
       });
     }
 
+    const rejectionReason =
+      typeof value.kycRejectionReason === 'string' ? value.kycRejectionReason.trim() : '';
+
+    const pendingRoleRequest = await RoleRequest.findOne({
+      userId: user._id,
+      status: 'pending',
+    }).sort({ createdAt: -1 });
+
+    // Role-request moderation flow (user -> provider):
+    // - approve/reject role request only
+    // - never mutate kycStatus here unless caller explicitly sends kycStatus
+    if (pendingRoleRequest && !value.kycStatus) {
+      if (typeof value.isVerified !== 'boolean') {
+        return res.status(400).json({
+          status: 'error',
+          message: 'isVerified is required to approve/reject provider role request',
+        });
+      }
+
+      if (value.isVerified === true) {
+        const hasVerifiedKyc = user.kycStatus === 'verified' && user.isVerified === true;
+        if (!hasVerifiedKyc) {
+          return res.status(400).json({
+            status: 'error',
+            message: 'Chỉ có thể duyệt nâng cấp role khi người dùng đã KYC verified.',
+          });
+        }
+
+        user.role = 'provider';
+        await user.save({ validateBeforeSave: false });
+
+        pendingRoleRequest.status = 'approved';
+        pendingRoleRequest.rejectionReason = '';
+        await pendingRoleRequest.save({ validateBeforeSave: false });
+
+        return res.status(200).json({
+          status: 'success',
+          message: 'Đã duyệt yêu cầu nâng cấp tài khoản lên Provider.',
+          data: { user, roleRequest: pendingRoleRequest },
+        });
+      }
+
+      if (!rejectionReason) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'kycRejectionReason is required when rejecting a role request',
+        });
+      }
+
+      pendingRoleRequest.status = 'rejected';
+      pendingRoleRequest.rejectionReason = rejectionReason;
+      await pendingRoleRequest.save({ validateBeforeSave: false });
+
+      return res.status(200).json({
+        status: 'success',
+        message: 'Đã từ chối yêu cầu nâng cấp tài khoản.',
+        data: { user, roleRequest: pendingRoleRequest },
+      });
+    }
+
     if (
       typeof value.isVerified === 'boolean' &&
       value.kycStatus &&
@@ -515,13 +575,9 @@ exports.verifyProvider = async (req, res, next) => {
 
     if (nextKycStatus === 'verified') {
       nextIsVerified = true;
-      user.role = 'provider'; // Automatically update role when KYC is verified
     } else {
       nextIsVerified = false;
     }
-
-    const rejectionReason =
-      typeof value.kycRejectionReason === 'string' ? value.kycRejectionReason.trim() : '';
 
     if (nextKycStatus === 'rejected' && !rejectionReason) {
       return res.status(400).json({
@@ -535,17 +591,6 @@ exports.verifyProvider = async (req, res, next) => {
     user.kycRejectionReason = nextKycStatus === 'rejected' ? rejectionReason : '';
 
     await user.save({ validateBeforeSave: false });
-
-    // ─── Update Associated RoleRequest if it exists ──────────
-    if (nextKycStatus === 'verified' || nextKycStatus === 'rejected') {
-      await RoleRequest.findOneAndUpdate(
-        { userId: user._id, status: 'pending' },
-        {
-          status: nextKycStatus === 'verified' ? 'approved' : 'rejected',
-          rejectionReason: nextKycStatus === 'rejected' ? rejectionReason : '',
-        }
-      );
-    }
 
     res.status(200).json({
       status: 'success',
